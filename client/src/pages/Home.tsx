@@ -1,15 +1,6 @@
 import { Button } from "@/components/ui/button";
 import html2canvas from "html2canvas";
-import {
-  Download,
-  Image as ImageIcon,
-  Plus,
-  Trash2,
-  Upload,
-  Minus,
-  RotateCcw,
-  Palette,
-} from "lucide-react";
+import { Download, Image as ImageIcon, Plus, Trash2, Upload, X } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -18,40 +9,36 @@ interface MoodGridItem {
   url: string | null;
 }
 
-function safeFileName(input: string) {
-  const trimmed = input.trim();
-  if (!trimmed) return "moodmap";
-  return trimmed
-    .replace(/[\\/:*?"<>|]/g, "") // 윈도우 금지 문자 제거
-    .replace(/\s+/g, "-")
-    .slice(0, 40);
-}
+const BG_PRESETS = [
+  { label: "Warm White", value: "#fafaf9" },
+  { label: "Ivory", value: "#fff7ed" },
+  { label: "Beige", value: "#f5f5dc" },
+  { label: "Light Gray", value: "#f3f4f6" },
+  { label: "Black", value: "#0b0b0f" },
+];
 
 export default function Home() {
-  /** 페이지 표시용 타이틀(큰 제목) */
-  const [pageTitle, setPageTitle] = useState("MOODMAP");
+  // 제목(저장 파일명에도 반영)
+  const [title, setTitle] = useState("MOODMAP");
 
-  /** 저장용 제목(이미지에 찍히고 파일명에도 쓰임) */
-  const [exportTitle, setExportTitle] = useState("내 무드맵");
+  // 배경색 선택
+  const [bgColor, setBgColor] = useState("#fafaf9");
 
-  /** 배경색 */
-  const [bgColor, setBgColor] = useState("#fafaf9"); // warm white
-
-  /** 기본 9칸 */
-  const initialGrid = useMemo<MoodGridItem[]>(
-    () => Array.from({ length: 9 }, () => ({ id: crypto.randomUUID(), url: null })),
-    []
+  // 그리드(기본 9칸)
+  const [gridItems, setGridItems] = useState<MoodGridItem[]>(
+    Array.from({ length: 9 }, () => ({ id: crypto.randomUUID(), url: null }))
   );
 
-  const [gridItems, setGridItems] = useState<MoodGridItem[]>(initialGrid);
   const [isExporting, setIsExporting] = useState(false);
-
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
 
-  /** 저장 대상(제목 포함한 카드 전체) */
-  const exportRef = useRef<HTMLDivElement>(null);
+  const filledCount = useMemo(
+    () => gridItems.filter((i) => !!i.url).length,
+    [gridItems]
+  );
 
-  // 이미지 업로드 핸들러
+  // 이미지 업로드: 빈칸부터 채우고 남으면 칸 추가
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
@@ -59,7 +46,6 @@ export default function Home() {
     const newItems = [...gridItems];
     let fileIndex = 0;
 
-    // 빈 슬롯 찾아서 채우기
     for (let i = 0; i < newItems.length && fileIndex < files.length; i++) {
       if (newItems[i].url === null) {
         const file = files[fileIndex];
@@ -69,7 +55,6 @@ export default function Home() {
       }
     }
 
-    // 빈 슬롯보다 파일이 더 많으면 추가
     while (fileIndex < files.length) {
       const file = files[fileIndex];
       const url = URL.createObjectURL(file);
@@ -79,32 +64,28 @@ export default function Home() {
 
     setGridItems(newItems);
 
-    // input 초기화
+    // input 초기화(같은 파일 재선택 가능)
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  // 개별 이미지 삭제
+  // 개별 이미지 삭제(칸은 유지, 이미지만 비우기)
   const removeImage = (id: string) => {
     setGridItems((items) =>
       items.map((item) => (item.id === id ? { ...item, url: null } : item))
     );
   };
 
-  // 그리드 추가
+  // 칸 추가
   const addGridSlot = () => {
     setGridItems((prev) => [...prev, { id: crypto.randomUUID(), url: null }]);
   };
 
-  // 그리드 마지막 칸 삭제(안전하게)
-  const removeLastGridSlot = () => {
-    if (gridItems.length <= 1) return;
-    setGridItems((prev) => prev.slice(0, -1));
-  };
-
-  // 9칸으로 초기화
-  const resetToNine = () => {
-    setGridItems(Array.from({ length: 9 }, () => ({ id: crypto.randomUUID(), url: null })));
-    toast.success("9칸으로 초기화했습니다.");
+  // ✅ 칸 삭제(추가한 칸도 줄일 수 있도록)
+  const removeGridSlot = (id: string) => {
+    setGridItems((prev) => {
+      if (prev.length <= 1) return prev;
+      return prev.filter((x) => x.id !== id);
+    });
   };
 
   // 드래그 앤 드롭
@@ -119,48 +100,50 @@ export default function Home() {
       const file = files[0];
       if (file.type.startsWith("image/")) {
         const url = URL.createObjectURL(file);
-        setGridItems((items) => items.map((item) => (item.id === id ? { ...item, url } : item)));
+        setGridItems((items) =>
+          items.map((item) => (item.id === id ? { ...item, url } : item))
+        );
       }
     }
   };
 
-  // 이미지로 저장
+  // ✅ 저장: JPG로 저장(모바일 성공률↑, 용량↓)
   const exportToImage = async () => {
-    if (!exportRef.current) return;
+    if (!gridRef.current) return;
 
     try {
       setIsExporting(true);
 
-      // 폰트/레이아웃 안정화용 한 박자
-      await new Promise((r) => setTimeout(r, 50));
+      // 모바일/태블릿은 scale 낮추기(메모리 터짐 방지)
+      const isMobile = window.innerWidth < 900;
 
-      // html2canvas가 스크롤 위치 영향을 받는 경우가 있어서 보정
-      const scrollX = window.scrollX;
-      const scrollY = window.scrollY;
-
-      const canvas = await html2canvas(exportRef.current, {
-        scale: 2,
-        backgroundColor: bgColor,
+      const canvas = await html2canvas(gridRef.current, {
+        scale: isMobile ? 1 : 2,
+        backgroundColor: bgColor, // 배경색 반영
         useCORS: true,
         logging: false,
-        scrollX: -scrollX,
-        scrollY: -scrollY,
-        windowWidth: document.documentElement.clientWidth,
-        windowHeight: document.documentElement.clientHeight,
       });
 
-      const image = canvas.toDataURL("image/png");
-
-      const a = document.createElement("a");
-      a.href = image;
-
       const date = new Date().toISOString().slice(0, 10);
-      a.download = `${safeFileName(exportTitle)}-${date}.png`;
+      const safeTitle = (title || "moodmap")
+        .trim()
+        .replace(/[\\/:*?"<>|]/g, "")
+        .slice(0, 30);
 
-      // iOS/Safari 등에서 click이 가끔 무시되는 케이스 방지
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+      const blob: Blob | null = await new Promise((resolve) =>
+        canvas.toBlob((b) => resolve(b), "image/jpeg", 0.92)
+      );
+
+      if (!blob) throw new Error("toBlob failed");
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${safeTitle}-${date}.jpg`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
 
       toast.success("이미지로 저장되었습니다!");
     } catch (error) {
@@ -172,12 +155,15 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground font-sans selection:bg-primary/20">
+    <div
+      className="min-h-screen text-foreground font-sans selection:bg-primary/20"
+      style={{ backgroundColor: bgColor }}
+    >
       <main className="container max-w-4xl py-12 md:py-20 px-4 mx-auto flex flex-col items-center">
-        {/* Header Section */}
-        <header className="text-center mb-10 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        {/* Header */}
+        <header className="text-center mb-10 space-y-4 w-full">
           <h1 className="text-4xl md:text-5xl font-serif font-light tracking-tight text-foreground/90">
-            {pageTitle}
+            {title || "MOODMAP"}
           </h1>
 
           <p className="text-muted-foreground font-light text-lg max-w-md mx-auto leading-relaxed">
@@ -185,42 +171,41 @@ export default function Home() {
             MOODMAP은 당신의 순간과 취향을 지도처럼 저장합니다.
           </p>
 
-          {/* 제목/설정 영역 (기존 감성 유지하면서 추가) */}
-          <div className="mt-6 flex flex-col gap-3 items-center">
-            {/* 페이지 제목(화면 표시용) */}
+          {/* 제목 입력 (페이지 + 저장 파일명에 반영) */}
+          <div className="flex flex-col items-center gap-3 pt-2">
             <input
-              value={pageTitle}
-              onChange={(e) => setPageTitle(e.target.value)}
-              placeholder="페이지 제목"
-              className="w-full max-w-sm rounded-full px-4 py-2 text-center border border-border/50 bg-background text-foreground outline-none focus:ring-2 focus:ring-primary/20"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="제목을 입력하세요"
+              className="w-full max-w-xs mx-auto rounded-full px-4 py-2 text-center border border-border/50 bg-background/70 text-foreground outline-none focus:ring-2 focus:ring-primary/20"
             />
 
-            {/* 저장용 제목 */}
-            <input
-              value={exportTitle}
-              onChange={(e) => setExportTitle(e.target.value)}
-              placeholder="저장할 이미지 제목 (파일명/이미지 상단)"
-              className="w-full max-w-sm rounded-full px-4 py-2 text-center border border-border/50 bg-background text-foreground outline-none focus:ring-2 focus:ring-primary/20"
-            />
+            {/* 배경색 선택 */}
+            <div className="flex flex-wrap gap-2 justify-center">
+              {BG_PRESETS.map((p) => (
+                <button
+                  key={p.value}
+                  type="button"
+                  onClick={() => setBgColor(p.value)}
+                  className="flex items-center gap-2 rounded-full px-3 py-1 border border-border/40 bg-background/70 hover:bg-background transition"
+                >
+                  <span
+                    className="inline-block w-4 h-4 rounded-full border border-border/40"
+                    style={{ backgroundColor: p.value }}
+                  />
+                  <span className="text-sm text-muted-foreground">{p.label}</span>
+                </button>
+              ))}
+            </div>
 
-            {/* 배경색 */}
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Palette className="w-4 h-4" />
-              <span>배경색</span>
-              <input
-                type="color"
-                value={bgColor}
-                onChange={(e) => setBgColor(e.target.value)}
-                className="h-8 w-10 rounded-md border border-border/40 bg-transparent"
-                aria-label="배경색 선택"
-              />
-              <span className="font-mono text-xs opacity-70">{bgColor}</span>
+            <div className="text-xs text-muted-foreground/70">
+              채운 사진: {filledCount} / {gridItems.length}
             </div>
           </div>
         </header>
 
         {/* Action Bar */}
-        <div className="flex flex-wrap gap-3 justify-center mb-8 animate-in fade-in slide-in-from-bottom-6 duration-700 delay-100">
+        <div className="flex flex-wrap gap-4 justify-center mb-8">
           <input
             type="file"
             ref={fileInputRef}
@@ -247,48 +232,26 @@ export default function Home() {
             className="rounded-full px-6 h-12 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all duration-300"
           >
             <Plus className="w-4 h-4 mr-2" />
-            칸 추가
-          </Button>
-
-          <Button
-            onClick={removeLastGridSlot}
-            variant="ghost"
-            size="lg"
-            className="rounded-full px-6 h-12 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all duration-300"
-            disabled={gridItems.length <= 1}
-          >
-            <Minus className="w-4 h-4 mr-2" />
-            칸 삭제
-          </Button>
-
-          <Button
-            onClick={resetToNine}
-            variant="ghost"
-            size="lg"
-            className="rounded-full px-6 h-12 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all duration-300"
-          >
-            <RotateCcw className="w-4 h-4 mr-2" />
-            9칸 초기화
+            칸 추가하기
           </Button>
         </div>
 
-        {/* Export Area (이 영역이 그대로 이미지가 됨) */}
+        {/* Export 대상 영역 */}
         <div
-          ref={exportRef}
-          style={{ backgroundColor: bgColor }}
-          className="w-full bg-card p-4 md:p-8 rounded-xl shadow-[0_20px_40px_-15px_rgba(0,0,0,0.05)] mb-24 border border-border/40"
+          ref={gridRef}
+          className="w-full p-4 md:p-8 rounded-xl shadow-[0_20px_40px_-15px_rgba(0,0,0,0.08)] mb-24 border"
+          style={{
+            backgroundColor: bgColor, // ✅ 캡처 영역 배경도 동일하게
+            borderColor: "rgba(0,0,0,0.06)",
+          }}
         >
-          {/* 저장 이미지 상단 제목 */}
+          {/* ✅ 저장 이미지에 제목도 같이 들어가게 */}
           <div className="text-center mb-6">
-            <div className="text-xs uppercase tracking-[0.3em] text-muted-foreground/50 font-serif">
-              {pageTitle}
-            </div>
-            <div className="mt-2 text-2xl md:text-3xl font-serif font-light text-foreground/80">
-              {exportTitle.trim() ? exportTitle : " "}
+            <div className="text-2xl md:text-3xl font-serif font-light tracking-tight">
+              {title || "MOODMAP"}
             </div>
           </div>
 
-          {/* Mood Grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {gridItems.map((item) => (
               <div
@@ -302,6 +265,19 @@ export default function Home() {
                       : "bg-secondary/30 border-2 border-dashed border-muted-foreground/10 hover:border-primary/30 hover:bg-secondary/50"
                   }`}
               >
+                {/* ✅ 칸 삭제 버튼 (hover 시 우상단) */}
+                <button
+                  type="button"
+                  onClick={() => removeGridSlot(item.id)}
+                  className="absolute top-2 right-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity"
+                  aria-label="칸 삭제"
+                  title="칸 삭제"
+                >
+                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-background/80 border border-border/40 shadow-sm hover:bg-background">
+                    <X className="w-4 h-4 text-muted-foreground" />
+                  </span>
+                </button>
+
                 {item.url ? (
                   <>
                     <img
@@ -315,7 +291,6 @@ export default function Home() {
                         size="icon"
                         className="rounded-full w-10 h-10 shadow-lg scale-90 hover:scale-100 transition-transform"
                         onClick={() => removeImage(item.id)}
-                        aria-label="이미지 삭제"
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
@@ -352,7 +327,7 @@ export default function Home() {
             ) : (
               <>
                 <Download className="w-5 h-5 mr-2" />
-                한 장으로 저장하기
+                한 장으로 저장하기 (JPG)
               </>
             )}
           </Button>
