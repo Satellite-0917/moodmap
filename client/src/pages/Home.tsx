@@ -117,8 +117,9 @@ export default function Home() {
           <h1 className="text-4xl font-serif font-light tracking-tight">
             MOODMAP
           </h1>
-          <p className="text-muted-foreground text-lg">
-            좋아하는 순간들을 모아 한 장의 그림으로.
+<p className="text-muted-foreground text-lg">
+  내가 좋아한 장면을 모아 나만의 무드 지도를 만드세요.<br />
+  MOODMAP은 당신의 순간과 취향을 지도처럼 저장합니다.
           </p>
         </header>
 
