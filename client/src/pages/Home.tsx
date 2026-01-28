@@ -10,16 +10,16 @@ interface MoodGridItem {
 }
 
 export default function Home() {
+  const [title, setTitle] = useState("MOODMAP");
+
   const [gridItems, setGridItems] = useState<MoodGridItem[]>(
     Array.from({ length: 9 }, () => ({ id: crypto.randomUUID(), url: null }))
   );
   const [isExporting, setIsExporting] = useState(false);
-  const [exportBg, setExportBg] = useState("#fafaf9"); // ✅ 배경색 상태
-
   const fileInputRef = useRef<HTMLInputElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
 
-  // 이미지 업로드 핸들러
+  // 이미지 업로드
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
@@ -50,17 +50,21 @@ export default function Home() {
     }
   };
 
+  // 이미지 삭제
   const removeImage = (id: string) => {
-    setGridItems((items) =>
-      items.map((item) => (item.id === id ? { ...item, url: null } : item))
+    setGridItems(items =>
+      items.map(item =>
+        item.id === id ? { ...item, url: null } : item
+      )
     );
   };
 
+  // 칸 추가
   const addGridSlot = () => {
-    setGridItems((prev) => [...prev, { id: crypto.randomUUID(), url: null }]);
+    setGridItems(prev => [...prev, { id: crypto.randomUUID(), url: null }]);
   };
 
-  // 이미지로 저장
+  // 저장
   const exportToImage = async () => {
     if (!gridRef.current) return;
 
@@ -68,10 +72,9 @@ export default function Home() {
       setIsExporting(true);
       const canvas = await html2canvas(gridRef.current, {
         scale: 2,
-        backgroundColor: exportBg, // ✅ 선택한 색 적용
+        backgroundColor: "#fafaf9",
         useCORS: true,
         logging: false,
-        removeContainer: true,
       });
 
       const image = canvas.toDataURL("image/png");
@@ -100,8 +103,8 @@ export default function Home() {
       const file = files[0];
       if (file.type.startsWith("image/")) {
         const url = URL.createObjectURL(file);
-        setGridItems((items) =>
-          items.map((item) =>
+        setGridItems(items =>
+          items.map(item =>
             item.id === id ? { ...item, url } : item
           )
         );
@@ -110,16 +113,26 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground font-sans">
-      <main className="container max-w-4xl py-12 px-4 mx-auto flex flex-col items-center">
+    <div className="min-h-screen bg-background text-foreground font-sans selection:bg-primary/20">
+      <main className="container max-w-4xl py-12 md:py-20 px-4 mx-auto flex flex-col items-center">
 
+        {/* Header */}
         <header className="text-center mb-12 space-y-4">
-          <h1 className="text-4xl font-serif font-light tracking-tight">
-            MOODMAP
+          <h1 className="text-4xl md:text-5xl font-serif font-light tracking-tight text-foreground/90">
+            {title}
           </h1>
-<p className="text-muted-foreground text-lg">
-  내가 좋아한 장면을 모아 나만의 무드 지도를 만드세요.<br />
-  MOODMAP은 당신의 순간과 취향을 지도처럼 저장합니다.
+
+          {/* 제목 입력 */}
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="제목을 입력하세요"
+            className="mt-4 w-full max-w-xs mx-auto rounded-full px-4 py-2 text-center border border-border/50 bg-background text-foreground outline-none focus:ring-2 focus:ring-primary/20"
+          />
+
+          <p className="text-muted-foreground font-light text-lg max-w-md mx-auto leading-relaxed">
+            내가 좋아한 장면을 모아 나만의 무드 지도를 만드세요.<br />
+            MOODMAP은 당신의 순간과 취향을 지도처럼 저장합니다.
           </p>
         </header>
 
@@ -134,33 +147,31 @@ export default function Home() {
             accept="image/*"
           />
 
-          <Button onClick={() => fileInputRef.current?.click()}>
+          <Button
+            onClick={() => fileInputRef.current?.click()}
+            variant="outline"
+            size="lg"
+            className="rounded-full px-8 h-12"
+          >
             <Upload className="w-4 h-4 mr-2" />
             사진 가져오기
           </Button>
 
-          <Button onClick={addGridSlot} variant="ghost">
+          <Button
+            onClick={addGridSlot}
+            variant="ghost"
+            size="lg"
+            className="rounded-full px-6 h-12"
+          >
             <Plus className="w-4 h-4 mr-2" />
             칸 추가하기
           </Button>
-
-          {/* ✅ 배경색 선택 */}
-          <label className="flex items-center gap-2 px-4 h-10 border rounded-full text-sm">
-            배경색
-            <input
-              type="color"
-              value={exportBg}
-              onChange={(e) => setExportBg(e.target.value)}
-              className="h-6 w-6 cursor-pointer"
-            />
-          </label>
         </div>
 
-        {/* Mood Grid */}
+        {/* Grid */}
         <div
           ref={gridRef}
-          style={{ backgroundColor: exportBg }} // ✅ 실제 배경 반영
-          className="w-full p-6 rounded-xl shadow mb-12"
+          className="w-full bg-card p-4 md:p-8 rounded-xl shadow mb-12 border border-border/40"
         >
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {gridItems.map((item) => (
@@ -168,11 +179,9 @@ export default function Home() {
                 key={item.id}
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, item.id)}
-                className={`aspect-square relative rounded-lg overflow-hidden ${
-                  item.url
-                    ? "bg-transparent"
-                    : "bg-secondary/30 border-2 border-dashed"
-                }`}
+                className={`aspect-square relative group rounded-lg overflow-hidden
+                  ${item.url ? "bg-transparent" : "bg-secondary/30 border-2 border-dashed"}
+                `}
               >
                 {item.url ? (
                   <>
@@ -181,10 +190,11 @@ export default function Home() {
                       alt="Mood"
                       className="w-full h-full object-cover"
                     />
-                    <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 bg-black/20">
+                    <div className="absolute inset-0 bg-black/10 flex items-center justify-center opacity-0 group-hover:opacity-100">
                       <Button
                         variant="destructive"
                         size="icon"
+                        className="rounded-full w-10 h-10"
                         onClick={() => removeImage(item.id)}
                       >
                         <Trash2 className="w-4 h-4" />
@@ -193,7 +203,7 @@ export default function Home() {
                   </>
                 ) : (
                   <div
-                    className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground cursor-pointer"
+                    className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground/40 cursor-pointer"
                     onClick={() => fileInputRef.current?.click()}
                   >
                     <ImageIcon className="w-8 h-8 mb-2" />
@@ -204,17 +214,18 @@ export default function Home() {
             ))}
           </div>
 
-          <div className="text-center mt-8 text-xs text-muted-foreground">
+          <div className="text-center mt-8 text-xs text-muted-foreground/30 font-serif tracking-widest uppercase">
             Created with MoodMap
           </div>
         </div>
 
         {/* Save Button */}
-        <div className="fixed bottom-8 left-0 right-0 flex justify-center">
+        <div className="fixed bottom-8 left-0 right-0 flex justify-center z-50">
           <Button
             onClick={exportToImage}
             disabled={isExporting}
-            className="rounded-full px-8 h-14"
+            size="lg"
+            className="rounded-full px-8 h-14 bg-foreground text-background"
           >
             {isExporting ? "저장 중..." : (
               <>
@@ -224,7 +235,7 @@ export default function Home() {
             )}
           </Button>
         </div>
+
       </main>
     </div>
   );
-}
