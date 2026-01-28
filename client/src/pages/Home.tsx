@@ -131,8 +131,8 @@ export default function Home() {
           />
 
           <p className="text-muted-foreground font-light text-lg max-w-md mx-auto leading-relaxed">
-            내가 좋아한 장면을 모아 나만의 무드 지도를 만드세요.<br />
-            MOODMAP은 당신의 순간과 취향을 지도처럼 저장합니다.
+            좋아하는 순간들을 모아 한 장의 그림으로.<br />
+            MOODMAP으로 복잡함 없이, 오직 사진과 당신의 감각으로만.
           </p>
         </header>
 
