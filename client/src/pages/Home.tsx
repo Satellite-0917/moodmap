@@ -14,6 +14,8 @@ export default function Home() {
     Array.from({ length: 9 }, () => ({ id: crypto.randomUUID(), url: null }))
   );
   const [isExporting, setIsExporting] = useState(false);
+  const [exportBg, setExportBg] = useState("#fafaf9"); // ✅ 배경색 상태
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
 
@@ -24,8 +26,7 @@ export default function Home() {
 
     const newItems = [...gridItems];
     let fileIndex = 0;
-    
-    // 빈 슬롯 찾아서 채우기
+
     for (let i = 0; i < newItems.length && fileIndex < files.length; i++) {
       if (newItems[i].url === null) {
         const file = files[fileIndex];
@@ -35,7 +36,6 @@ export default function Home() {
       }
     }
 
-    // 만약 빈 슬롯보다 파일이 더 많으면 추가
     while (fileIndex < files.length) {
       const file = files[fileIndex];
       const url = URL.createObjectURL(file);
@@ -44,44 +44,42 @@ export default function Home() {
     }
 
     setGridItems(newItems);
-    
-    // input 초기화 (같은 파일 다시 선택 가능하도록)
+
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
   };
 
-  // 개별 이미지 삭제
   const removeImage = (id: string) => {
-    setGridItems(items => items.map(item => 
-      item.id === id ? { ...item, url: null } : item
-    ));
+    setGridItems((items) =>
+      items.map((item) => (item.id === id ? { ...item, url: null } : item))
+    );
   };
 
-  // 그리드 추가
   const addGridSlot = () => {
-    setGridItems(prev => [...prev, { id: crypto.randomUUID(), url: null }]);
+    setGridItems((prev) => [...prev, { id: crypto.randomUUID(), url: null }]);
   };
 
   // 이미지로 저장
   const exportToImage = async () => {
     if (!gridRef.current) return;
-    
+
     try {
       setIsExporting(true);
       const canvas = await html2canvas(gridRef.current, {
-        scale: 2, // 고해상도
-        backgroundColor: "#fafaf9", // 배경색 유지 (warm white)
+        scale: 2,
+        backgroundColor: exportBg, // ✅ 선택한 색 적용
         useCORS: true,
         logging: false,
+        removeContainer: true,
       });
-      
+
       const image = canvas.toDataURL("image/png");
       const link = document.createElement("a");
       link.href = image;
       link.download = `moodmap-${new Date().toISOString().slice(0, 10)}.png`;
       link.click();
-      
+
       toast.success("이미지로 저장되었습니다!");
     } catch (error) {
       console.error("Export failed:", error);
@@ -91,7 +89,6 @@ export default function Home() {
     }
   };
 
-  // 드래그 앤 드롭 핸들러
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
   };
@@ -101,32 +98,32 @@ export default function Home() {
     const files = e.dataTransfer.files;
     if (files && files.length > 0) {
       const file = files[0];
-      if (file.type.startsWith('image/')) {
+      if (file.type.startsWith("image/")) {
         const url = URL.createObjectURL(file);
-        setGridItems(items => items.map(item => 
-          item.id === id ? { ...item, url } : item
-        ));
+        setGridItems((items) =>
+          items.map((item) =>
+            item.id === id ? { ...item, url } : item
+          )
+        );
       }
     }
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground font-sans selection:bg-primary/20">
-      <main className="container max-w-4xl py-12 md:py-20 px-4 mx-auto flex flex-col items-center">
-        
-        {/* Header Section */}
-        <header className="text-center mb-12 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
-          <h1 className="text-4xl md:text-5xl font-serif font-light tracking-tight text-foreground/90">
+    <div className="min-h-screen bg-background text-foreground font-sans">
+      <main className="container max-w-4xl py-12 px-4 mx-auto flex flex-col items-center">
+
+        <header className="text-center mb-12 space-y-4">
+          <h1 className="text-4xl font-serif font-light tracking-tight">
             MOODMAP
           </h1>
-          <p className="text-muted-foreground font-light text-lg max-w-md mx-auto leading-relaxed">
-            좋아하는 순간들을 모아 한 장의 그림으로.<br/>
-            복잡함 없이, 오직 사진과 당신의 감각으로만.
+          <p className="text-muted-foreground text-lg">
+            좋아하는 순간들을 모아 한 장의 그림으로.
           </p>
         </header>
 
         {/* Action Bar */}
-        <div className="flex flex-wrap gap-4 justify-center mb-8 animate-in fade-in slide-in-from-bottom-6 duration-700 delay-100">
+        <div className="flex flex-wrap gap-4 justify-center mb-8">
           <input
             type="file"
             ref={fileInputRef}
@@ -135,60 +132,58 @@ export default function Home() {
             multiple
             accept="image/*"
           />
-          <Button 
-            onClick={() => fileInputRef.current?.click()}
-            variant="outline" 
-            size="lg"
-            className="rounded-full px-8 h-12 border-primary/20 hover:bg-primary/5 hover:text-primary transition-all duration-300 shadow-sm hover:shadow-md"
-          >
+
+          <Button onClick={() => fileInputRef.current?.click()}>
             <Upload className="w-4 h-4 mr-2" />
             사진 가져오기
           </Button>
-          
-          <Button 
-            onClick={addGridSlot}
-            variant="ghost" 
-            size="lg"
-            className="rounded-full px-6 h-12 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all duration-300"
-          >
+
+          <Button onClick={addGridSlot} variant="ghost">
             <Plus className="w-4 h-4 mr-2" />
             칸 추가하기
           </Button>
+
+          {/* ✅ 배경색 선택 */}
+          <label className="flex items-center gap-2 px-4 h-10 border rounded-full text-sm">
+            배경색
+            <input
+              type="color"
+              value={exportBg}
+              onChange={(e) => setExportBg(e.target.value)}
+              className="h-6 w-6 cursor-pointer"
+            />
+          </label>
         </div>
 
         {/* Mood Grid */}
-        <div 
+        <div
           ref={gridRef}
-          className="w-full bg-card p-4 md:p-8 rounded-xl shadow-[0_20px_40px_-15px_rgba(0,0,0,0.05)] mb-12 animate-in fade-in zoom-in-95 duration-700 delay-200 border border-border/40"
+          style={{ backgroundColor: exportBg }} // ✅ 실제 배경 반영
+          className="w-full p-6 rounded-xl shadow mb-12"
         >
-          {/* Grid Title Area for Export */}
-          <div className="text-center mb-8 hidden md:block opacity-0 group-hover:opacity-100 transition-opacity">
-            {/* Export 시에만 보일 수도 있고, 항상 보일 수도 있음. 디자인상 깔끔하게 유지 */}
-          </div>
-
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {gridItems.map((item) => (
               <div
                 key={item.id}
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, item.id)}
-                className={`
-                  aspect-square relative group rounded-lg overflow-hidden transition-all duration-500 ease-out
-                  ${item.url ? 'bg-transparent shadow-sm' : 'bg-secondary/30 border-2 border-dashed border-muted-foreground/10 hover:border-primary/30 hover:bg-secondary/50'}
-                `}
+                className={`aspect-square relative rounded-lg overflow-hidden ${
+                  item.url
+                    ? "bg-transparent"
+                    : "bg-secondary/30 border-2 border-dashed"
+                }`}
               >
                 {item.url ? (
                   <>
-                    <img 
-                      src={item.url} 
-                      alt="Mood" 
-                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                    <img
+                      src={item.url}
+                      alt="Mood"
+                      className="w-full h-full object-cover"
                     />
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100">
+                    <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 bg-black/20">
                       <Button
                         variant="destructive"
                         size="icon"
-                        className="rounded-full w-10 h-10 shadow-lg scale-90 hover:scale-100 transition-transform"
                         onClick={() => removeImage(item.id)}
                       >
                         <Trash2 className="w-4 h-4" />
@@ -196,34 +191,31 @@ export default function Home() {
                     </div>
                   </>
                 ) : (
-                  <div 
-                    className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground/40 cursor-pointer"
+                  <div
+                    className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground cursor-pointer"
                     onClick={() => fileInputRef.current?.click()}
                   >
-                    <ImageIcon className="w-8 h-8 mb-2 opacity-50" />
-                    <span className="text-sm font-light">Drop or Click</span>
+                    <ImageIcon className="w-8 h-8 mb-2" />
+                    <span className="text-sm">Drop or Click</span>
                   </div>
                 )}
               </div>
             ))}
           </div>
-          
-          <div className="text-center mt-8 text-xs text-muted-foreground/30 font-serif tracking-widest uppercase">
+
+          <div className="text-center mt-8 text-xs text-muted-foreground">
             Created with MoodMap
           </div>
         </div>
 
-        {/* Footer Action */}
-        <div className="fixed bottom-8 left-0 right-0 flex justify-center pointer-events-none z-50">
-          <Button 
+        {/* Save Button */}
+        <div className="fixed bottom-8 left-0 right-0 flex justify-center">
+          <Button
             onClick={exportToImage}
             disabled={isExporting}
-            size="lg"
-            className="pointer-events-auto rounded-full px-8 h-14 shadow-[0_10px_30px_-10px_rgba(0,0,0,0.15)] bg-foreground text-background hover:bg-foreground/90 transition-all duration-500 hover:scale-105 active:scale-95 disabled:opacity-70 text-base font-medium"
+            className="rounded-full px-8 h-14"
           >
-            {isExporting ? (
-              <span className="animate-pulse">저장 중...</span>
-            ) : (
+            {isExporting ? "저장 중..." : (
               <>
                 <Download className="w-5 h-5 mr-2" />
                 한 장으로 저장하기
@@ -231,7 +223,6 @@ export default function Home() {
             )}
           </Button>
         </div>
-
       </main>
     </div>
   );
