@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import html2canvas from "html2canvas";
 import { Download, Image as ImageIcon, Plus, Trash2, Upload } from "lucide-react";
 import { useRef, useState } from "react";
+import type { ChangeEvent, DragEvent } from "react";
 import { toast } from "sonner";
 
 interface MoodGridItem {
@@ -20,13 +21,14 @@ export default function Home() {
   const gridRef = useRef<HTMLDivElement>(null);
 
   // 이미지 업로드
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = (e: ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
     const newItems = [...gridItems];
     let fileIndex = 0;
 
+    // 빈 슬롯 채우기
     for (let i = 0; i < newItems.length && fileIndex < files.length; i++) {
       if (newItems[i].url === null) {
         const file = files[fileIndex];
@@ -36,6 +38,7 @@ export default function Home() {
       }
     }
 
+    // 남는 파일은 새 슬롯 생성
     while (fileIndex < files.length) {
       const file = files[fileIndex];
       const url = URL.createObjectURL(file);
@@ -45,6 +48,7 @@ export default function Home() {
 
     setGridItems(newItems);
 
+    // input 초기화 (같은 파일 다시 선택 가능)
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -52,16 +56,14 @@ export default function Home() {
 
   // 이미지 삭제
   const removeImage = (id: string) => {
-    setGridItems(items =>
-      items.map(item =>
-        item.id === id ? { ...item, url: null } : item
-      )
+    setGridItems((items) =>
+      items.map((item) => (item.id === id ? { ...item, url: null } : item))
     );
   };
 
   // 칸 추가
   const addGridSlot = () => {
-    setGridItems(prev => [...prev, { id: crypto.randomUUID(), url: null }]);
+    setGridItems((prev) => [...prev, { id: crypto.randomUUID(), url: null }]);
   };
 
   // 저장
@@ -70,6 +72,7 @@ export default function Home() {
 
     try {
       setIsExporting(true);
+
       const canvas = await html2canvas(gridRef.current, {
         scale: 2,
         backgroundColor: "#fafaf9",
@@ -92,21 +95,19 @@ export default function Home() {
     }
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
+  const handleDragOver = (e: DragEvent) => {
     e.preventDefault();
   };
 
-  const handleDrop = (e: React.DragEvent, id: string) => {
+  const handleDrop = (e: DragEvent, id: string) => {
     e.preventDefault();
     const files = e.dataTransfer.files;
     if (files && files.length > 0) {
       const file = files[0];
       if (file.type.startsWith("image/")) {
         const url = URL.createObjectURL(file);
-        setGridItems(items =>
-          items.map(item =>
-            item.id === id ? { ...item, url } : item
-          )
+        setGridItems((items) =>
+          items.map((item) => (item.id === id ? { ...item, url } : item))
         );
       }
     }
@@ -115,7 +116,6 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-background text-foreground font-sans selection:bg-primary/20">
       <main className="container max-w-4xl py-12 md:py-20 px-4 mx-auto flex flex-col items-center">
-
         {/* Header */}
         <header className="text-center mb-12 space-y-4">
           <h1 className="text-4xl md:text-5xl font-serif font-light tracking-tight text-foreground/90">
@@ -179,18 +179,16 @@ export default function Home() {
                 key={item.id}
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, item.id)}
-                className={`aspect-square relative group rounded-lg overflow-hidden
-                  ${item.url ? "bg-transparent" : "bg-secondary/30 border-2 border-dashed"}
-                `}
+                className={`aspect-square relative group rounded-lg overflow-hidden ${
+                  item.url
+                    ? "bg-transparent"
+                    : "bg-secondary/30 border-2 border-dashed border-muted-foreground/20"
+                }`}
               >
                 {item.url ? (
                   <>
-                    <img
-                      src={item.url}
-                      alt="Mood"
-                      className="w-full h-full object-cover"
-                    />
-                    <div className="absolute inset-0 bg-black/10 flex items-center justify-center opacity-0 group-hover:opacity-100">
+                    <img src={item.url} alt="Mood" className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-black/10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                       <Button
                         variant="destructive"
                         size="icon"
@@ -227,7 +225,9 @@ export default function Home() {
             size="lg"
             className="rounded-full px-8 h-14 bg-foreground text-background"
           >
-            {isExporting ? "저장 중..." : (
+            {isExporting ? (
+              "저장 중..."
+            ) : (
               <>
                 <Download className="w-5 h-5 mr-2" />
                 한 장으로 저장하기
@@ -235,7 +235,7 @@ export default function Home() {
             )}
           </Button>
         </div>
-
       </main>
     </div>
   );
+}
