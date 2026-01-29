@@ -1,7 +1,6 @@
 import { Button } from "@/components/ui/button";
-import html2canvas from "html2canvas";
 import { Download, Image as ImageIcon, Plus, Trash2, Upload, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 interface MoodGridItem {
@@ -9,43 +8,9 @@ interface MoodGridItem {
   url: string | null;
 }
 
-const BG_PRESETS = [
-  { label: "Warm White", value: "#fafaf9" },
-  { label: "Ivory", value: "#fff7ed" },
-  { label: "Beige", value: "#f5f5dc" },
-  { label: "Light Gray", value: "#f3f4f6" },
-  { label: "Black", value: "#0b0b0f" },
-];
-
-// ✅ 이미지 로딩/디코딩 완료까지 대기 (캡처 성공률↑)
-const waitForImages = async (root: HTMLElement) => {
-  const imgs = Array.from(root.querySelectorAll("img"));
-  await Promise.all(
-    imgs.map(async (img) => {
-      if (!img.complete) {
-        await new Promise<void>((res, rej) => {
-          img.onload = () => res();
-          img.onerror = () => rej();
-        });
-      }
-      // @ts-ignore
-      if (typeof img.decode === "function") {
-        try {
-          // @ts-ignore
-          await img.decode();
-        } catch {}
-      }
-    })
-  );
-};
-
-const nextFrame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
-
-// ✅ HEX 유효성 체크 & 정규화
+// ✅ HEX 유효성 체크 & 정규화 (#RGB/#RRGGBB 지원)
 const normalizeHex = (raw: string) => {
   const v = raw.trim();
-
-  // #RGB / #RRGGBB
   const withHash = v.startsWith("#") ? v : `#${v}`;
 
   if (/^#[0-9a-fA-F]{3}$/.test(withHash)) {
@@ -54,11 +19,7 @@ const normalizeHex = (raw: string) => {
     const b = withHash[3];
     return `#${r}${r}${g}${g}${b}${b}`.toLowerCase();
   }
-
-  if (/^#[0-9a-fA-F]{6}$/.test(withHash)) {
-    return withHash.toLowerCase();
-  }
-
+  if (/^#[0-9a-fA-F]{6}$/.test(withHash)) return withHash.toLowerCase();
   return null;
 };
 
@@ -67,16 +28,45 @@ const isDarkColor = (hex: string) => {
   const r = parseInt(h.slice(1, 3), 16);
   const g = parseInt(h.slice(3, 5), 16);
   const b = parseInt(h.slice(5, 7), 16);
-  // relative luminance-ish
   const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
   return luminance < 0.4;
+};
+
+// ✅ 이미지 로드 (blob: URL도 OK)
+const loadImage = (src: string) =>
+  new Promise<HTMLImageElement>((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+
+// ✅ object-cover처럼 꽉 채우기
+const drawCover = (
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement,
+  x: number,
+  y: number,
+  w: number,
+  h: number
+) => {
+  const iw = img.naturalWidth || img.width;
+  const ih = img.naturalHeight || img.height;
+
+  const scale = Math.max(w / iw, h / ih);
+  const sw = w / scale;
+  const sh = h / scale;
+  const sx = (iw - sw) / 2;
+  const sy = (ih - sh) / 2;
+
+  ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
 };
 
 export default function Home() {
   // 제목(저장 파일명에도 반영)
   const [title, setTitle] = useState("MOODMAP");
 
-  // ✅ 배경색: 입력값과 실제 적용값을 분리
+  // ✅ 배경색: 입력값 + 적용값 분리 (잘못된 HEX 입력 대비)
   const [bgInput, setBgInput] = useState("#fafaf9");
   const [bgColor, setBgColor] = useState("#fafaf9");
 
@@ -87,23 +77,22 @@ export default function Home() {
 
   const [isExporting, setIsExporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const gridRef = useRef<HTMLDivElement>(null);
 
   const filledCount = useMemo(() => gridItems.filter((i) => !!i.url).length, [gridItems]);
-
   const darkBg = useMemo(() => isDarkColor(bgColor), [bgColor]);
 
-  // ✅ blob URL 메모리 누수 방지: url 교체/삭제 시 revoke
+  // ✅ blob URL 메모리 누수 방지
   const revokeIfNeeded = (url: string | null) => {
     if (!url) return;
     if (url.startsWith("blob:")) URL.revokeObjectURL(url);
   };
 
-  // ✅ bgInput이 유효해지면 bgColor에 반영
-  useEffect(() => {
-    const norm = normalizeHex(bgInput);
+  // ✅ bgInput이 유효하면 bgColor로 반영
+  const applyBgIfValid = (next: string) => {
+    setBgInput(next);
+    const norm = normalizeHex(next);
     if (norm) setBgColor(norm);
-  }, [bgInput]);
+  };
 
   // 이미지 업로드: 빈칸부터 채우고 남으면 칸 추가
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -151,7 +140,7 @@ export default function Home() {
     setGridItems((prev) => [...prev, { id: crypto.randomUUID(), url: null }]);
   };
 
-  // 칸 삭제(추가한 칸도 줄일 수 있도록)
+  // 칸 삭제
   const removeGridSlot = (id: string) => {
     setGridItems((prev) => {
       if (prev.length <= 1) return prev;
@@ -173,7 +162,6 @@ export default function Home() {
       const file = files[0];
       if (file.type.startsWith("image/")) {
         const url = URL.createObjectURL(file);
-
         setGridItems((items) =>
           items.map((item) => {
             if (item.id !== id) return item;
@@ -185,67 +173,10 @@ export default function Home() {
     }
   };
 
-  // ✅ 저장: oklch 에러 해결 포함
+  // ✅ 저장: html2canvas 제거 → 캔버스 직접 합성 후 JPG 다운로드(OKLCH 완전 회피)
   const exportToImage = async () => {
-    if (!gridRef.current) return;
-
     try {
       setIsExporting(true);
-
-      // 1) 이미지 로딩/디코딩 대기
-      await waitForImages(gridRef.current);
-
-      // 2) 한 프레임 대기 (레이아웃 안정화)
-      await nextFrame();
-
-      // 3) scale 조절 (메모리 이슈 방지)
-      const isMobile = window.innerWidth < 900;
-      const scale = isMobile ? 1 : 1.5;
-
-      const canvas = await html2canvas(gridRef.current, {
-        scale,
-        backgroundColor: bgColor,
-        useCORS: false,
-        logging: false,
-
-        // ✅ 핵심: oklch() 같은 색상 함수를 캡처 중엔 안 쓰도록 "캡처용 스타일" 강제
-        onclone: (doc) => {
-          const root = doc.querySelector('[data-capture-root="true"]') as HTMLElement | null;
-          if (!root) return;
-
-          // 캡처 중 hover 버튼/오버레이로 인한 스타일 섞임 방지(안전)
-          const hideEls = Array.from(root.querySelectorAll('[data-capture-hide="true"]'));
-          hideEls.forEach((el) => ((el as HTMLElement).style.display = "none"));
-
-          const style = doc.createElement("style");
-          const textColor = isDarkColor(bgColor) ? "#ffffff" : "#111827";
-          const mutedColor = isDarkColor(bgColor) ? "rgba(255,255,255,0.35)" : "rgba(17,24,39,0.35)";
-          const borderColor = isDarkColor(bgColor) ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)";
-
-          style.textContent = `
-            /* 캡처 영역 내부: oklch/var 기반 스타일이 섞여도 안전한 값으로 덮기 */
-            [data-capture-root="true"] {
-              background: ${bgColor} !important;
-            }
-            [data-capture-root="true"] * {
-              text-shadow: none !important;
-              box-shadow: none !important;
-              transition: none !important;
-              animation: none !important;
-            }
-            [data-capture-root="true"] .capture-text {
-              color: ${textColor} !important;
-            }
-            [data-capture-root="true"] .capture-muted {
-              color: ${mutedColor} !important;
-            }
-            [data-capture-root="true"] .capture-border {
-              border-color: ${borderColor} !important;
-            }
-          `;
-          doc.head.appendChild(style);
-        },
-      });
 
       const date = new Date().toISOString().slice(0, 10);
       const safeTitle = (title || "moodmap")
@@ -253,23 +184,103 @@ export default function Home() {
         .replace(/[\\/:*?"<>|]/g, "")
         .slice(0, 30);
 
-      // 4) JPG blob 생성
-      let blob: Blob | null = await new Promise((resolve) =>
-        canvas.toBlob((b) => resolve(b), "image/jpeg", 0.92)
+      const cols = 3;
+      const rows = Math.ceil(gridItems.length / cols);
+
+      // 출력 크기(너무 크면 메모리 터짐 방지)
+      const cell = 520; // 각 칸 크기
+      const gap = 24; // 칸 사이 간격
+      const pad = 56; // 바깥 여백
+      const titleH = 90; // 제목 영역
+      const footerH = 50; // 하단 문구
+
+      const width = pad * 2 + cols * cell + (cols - 1) * gap;
+      const height = pad * 2 + titleH + rows * cell + (rows - 1) * gap + footerH;
+
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Canvas context not available");
+
+      // 배경
+      ctx.fillStyle = bgColor;
+      ctx.fillRect(0, 0, width, height);
+
+      // 텍스트 색
+      const textColor = isDarkColor(bgColor) ? "#ffffff" : "#111827";
+
+      // 제목
+      ctx.fillStyle = textColor;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = "48px serif";
+      ctx.fillText(title || "MOODMAP", width / 2, pad + titleH / 2);
+
+      const startY = pad + titleH;
+
+      // 이미지 로드(있는 것만)
+      const loadedMap = new Map<string, HTMLImageElement>();
+      await Promise.all(
+        gridItems
+          .filter((it) => !!it.url)
+          .map(async (it) => {
+            try {
+              const img = await loadImage(it.url!);
+              loadedMap.set(it.id, img);
+            } catch {
+              // 로드 실패는 빈칸 처리
+            }
+          })
       );
 
-      // ✅ toBlob이 null이면 fallback: dataURL로라도 저장
-      if (!blob) {
-        const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
-        const link = document.createElement("a");
-        link.href = dataUrl;
-        link.download = `${safeTitle}-${date}.jpg`;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        toast.success("이미지로 저장되었습니다!");
-        return;
+      // 칸 그리기
+      for (let i = 0; i < gridItems.length; i++) {
+        const r = Math.floor(i / cols);
+        const c = i % cols;
+
+        const x = pad + c * (cell + gap);
+        const y = startY + r * (cell + gap);
+
+        // 라운드 클립
+        const radius = 18;
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(x + radius, y);
+        ctx.arcTo(x + cell, y, x + cell, y + cell, radius);
+        ctx.arcTo(x + cell, y + cell, x, y + cell, radius);
+        ctx.arcTo(x, y + cell, x, y, radius);
+        ctx.arcTo(x, y, x + cell, y, radius);
+        ctx.closePath();
+        ctx.clip();
+
+        const item = gridItems[i];
+        const img = loadedMap.get(item.id);
+
+        if (img) {
+          drawCover(ctx, img, x, y, cell, cell);
+        } else {
+          // 빈칸 스타일
+          ctx.fillStyle = textColor === "#ffffff" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.04)";
+          ctx.fillRect(x, y, cell, cell);
+          ctx.strokeStyle = textColor === "#ffffff" ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.12)";
+          ctx.lineWidth = 3;
+          ctx.strokeRect(x + 6, y + 6, cell - 12, cell - 12);
+        }
+
+        ctx.restore();
       }
+
+      // footer
+      ctx.fillStyle = textColor === "#ffffff" ? "rgba(255,255,255,0.35)" : "rgba(17,24,39,0.35)";
+      ctx.font = "16px serif";
+      ctx.fillText("CREATED WITH MOODMAP", width / 2, height - pad / 2);
+
+      const blob: Blob | null = await new Promise((resolve) =>
+        canvas.toBlob((b) => resolve(b), "image/jpeg", 0.92)
+      );
+      if (!blob) throw new Error("toBlob failed");
 
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -290,10 +301,7 @@ export default function Home() {
   };
 
   return (
-    <div
-      className="min-h-screen text-foreground font-sans selection:bg-primary/20"
-      style={{ backgroundColor: bgColor }}
-    >
+    <div className="min-h-screen text-foreground font-sans selection:bg-primary/20" style={{ backgroundColor: bgColor }}>
       <main className="container max-w-4xl py-12 md:py-20 px-4 mx-auto flex flex-col items-center">
         {/* Header */}
         <header className="text-center mb-10 space-y-4 w-full">
@@ -306,8 +314,8 @@ export default function Home() {
             MOODMAP은 당신의 순간과 취향을 지도처럼 저장합니다.
           </p>
 
-          {/* 제목 입력 (페이지 + 저장 파일명에 반영) */}
           <div className="flex flex-col items-center gap-3 pt-2">
+            {/* 제목 입력 */}
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -315,52 +323,34 @@ export default function Home() {
               className="w-full max-w-xs mx-auto rounded-full px-4 py-2 text-center border border-border/50 bg-background/70 text-foreground outline-none focus:ring-2 focus:ring-primary/20"
             />
 
-            {/* ✅ 배경색: 직접 선택 + HEX 입력 + (옵션) 프리셋 */}
-            <div className="flex flex-col items-center gap-3">
-              <div className="flex items-center gap-3">
-                <span className="text-sm text-muted-foreground">배경색</span>
-
-                {/* 색상 피커 */}
-                <input
-                  type="color"
-                  value={bgColor}
-                  onChange={(e) => setBgInput(e.target.value)}
-                  className="w-10 h-10 p-0 border-0 bg-transparent cursor-pointer"
-                  aria-label="배경색 선택"
-                  title="배경색 선택"
-                />
-
-                {/* HEX 직접 입력 */}
-                <input
-                  value={bgInput}
-                  onChange={(e) => setBgInput(e.target.value)}
-                  placeholder="#fafaf9"
-                  className="w-36 rounded-full px-3 py-2 text-center border border-border/50 bg-background/70 text-foreground outline-none focus:ring-2 focus:ring-primary/20"
-                />
-              </div>
-
-              {/* 프리셋(빠른 선택용) */}
-              <div className="flex flex-wrap gap-2 justify-center">
-                {BG_PRESETS.map((p) => (
-                  <button
-                    key={p.value}
-                    type="button"
-                    onClick={() => setBgInput(p.value)}
-                    className="flex items-center gap-2 rounded-full px-3 py-1 border border-border/40 bg-background/70 hover:bg-background transition"
-                  >
-                    <span
-                      className="inline-block w-4 h-4 rounded-full border border-border/40"
-                      style={{ backgroundColor: p.value }}
-                    />
-                    <span className="text-sm text-muted-foreground">{p.label}</span>
-                  </button>
-                ))}
-              </div>
-
-              <div className="text-xs text-muted-foreground/70">
-                채운 사진: {filledCount} / {gridItems.length}
-              </div>
+            {/* ✅ 배경색: 라벨 없이 피커 + HEX 입력만 */}
+            <div className="flex items-center gap-3">
+              <input
+                type="color"
+                value={bgColor}
+                onChange={(e) => applyBgIfValid(e.target.value)}
+                className="w-10 h-10 p-0 border-0 bg-transparent cursor-pointer"
+                aria-label="배경색 선택"
+                title="배경색 선택"
+              />
+              <input
+                value={bgInput}
+                onChange={(e) => applyBgIfValid(e.target.value)}
+                placeholder="#fafaf9"
+                className="w-36 rounded-full px-3 py-2 text-center border border-border/50 bg-background/70 text-foreground outline-none focus:ring-2 focus:ring-primary/20"
+              />
             </div>
+
+            <div className="text-xs text-muted-foreground/70">
+              채운 사진: {filledCount} / {gridItems.length}
+            </div>
+
+            {/* 입력이 틀렸을 때만 조용히 힌트 (원하면 삭제 가능) */}
+            {bgInput.trim() && !normalizeHex(bgInput) ? (
+              <div className="text-xs text-muted-foreground/60">
+                HEX 형식으로 입력해줘 (예: #fafaf9 또는 fafaf9)
+              </div>
+            ) : null}
           </div>
         </header>
 
@@ -396,19 +386,16 @@ export default function Home() {
           </Button>
         </div>
 
-        {/* Export 대상 영역 */}
+        {/* 화면 표시용 보드 (저장엔 영향 없음: 저장은 캔버스로 직접 합성) */}
         <div
-          ref={gridRef}
-          data-capture-root="true"
-          className="w-full p-4 md:p-8 rounded-xl shadow-[0_20px_40px_-15px_rgba(0,0,0,0.08)] mb-24 border capture-border"
+          className="w-full p-4 md:p-8 rounded-xl shadow-[0_20px_40px_-15px_rgba(0,0,0,0.08)] mb-24 border"
           style={{
             backgroundColor: bgColor,
-            borderColor: "rgba(0,0,0,0.06)",
+            borderColor: darkBg ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.06)",
           }}
         >
-          {/* 저장 이미지에 제목도 같이 들어가게 */}
           <div className="text-center mb-6">
-            <div className={`text-2xl md:text-3xl font-serif font-light tracking-tight capture-text`}>
+            <div className="text-2xl md:text-3xl font-serif font-light tracking-tight">
               {title || "MOODMAP"}
             </div>
           </div>
@@ -426,14 +413,13 @@ export default function Home() {
                       : "bg-secondary/30 border-2 border-dashed border-muted-foreground/10 hover:border-primary/30 hover:bg-secondary/50"
                   }`}
               >
-                {/* 칸 삭제 버튼 (캡처에서는 숨김) */}
+                {/* 칸 삭제 버튼 */}
                 <button
                   type="button"
                   onClick={() => removeGridSlot(item.id)}
                   className="absolute top-2 right-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity"
                   aria-label="칸 삭제"
                   title="칸 삭제"
-                  data-capture-hide="true"
                 >
                   <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-background/80 border border-border/40 shadow-sm hover:bg-background">
                     <X className="w-4 h-4 text-muted-foreground" />
@@ -447,11 +433,7 @@ export default function Home() {
                       alt="Mood"
                       className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                     />
-                    {/* 삭제 오버레이 (캡처에서는 숨김) */}
-                    <div
-                      className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100"
-                      data-capture-hide="true"
-                    >
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100">
                       <Button
                         variant="destructive"
                         size="icon"
@@ -466,7 +448,6 @@ export default function Home() {
                   <div
                     className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground/40 cursor-pointer"
                     onClick={() => fileInputRef.current?.click()}
-                    data-capture-hide="true"
                   >
                     <ImageIcon className="w-8 h-8 mb-2 opacity-50" />
                     <span className="text-sm font-light">Drop or Click</span>
@@ -476,7 +457,7 @@ export default function Home() {
             ))}
           </div>
 
-          <div className="text-center mt-8 text-xs font-serif tracking-widest uppercase capture-muted">
+          <div className="text-center mt-8 text-xs text-muted-foreground/30 font-serif tracking-widest uppercase">
             Created with MoodMap
           </div>
         </div>
@@ -499,11 +480,6 @@ export default function Home() {
             )}
           </Button>
         </div>
-
-        {/* (선택) 어두운 배경일 때 안내가 너무 안 보이면 대비용 */}
-        {darkBg ? (
-          <div className="sr-only">Dark background enabled</div>
-        ) : null}
       </main>
     </div>
   );
