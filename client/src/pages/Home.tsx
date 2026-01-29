@@ -63,8 +63,12 @@ const drawCover = (
 };
 
 export default function Home() {
-  // 제목(저장 파일명에도 반영)
-  const [title, setTitle] = useState("MOODMAP");
+    // ✅ 페이지 상단 고정 타이틀
+   const PAGE_TITLE = "MOODMAP";
+
+   // ✅ 저장 이미지/파일명에 들어갈 제목(사용자 입력)
+   const [boardTitle, setBoardTitle] = useState("의 MOODMAP");
+
 
   // ✅ 배경색: 입력값 + 적용값 분리 (잘못된 HEX 입력 대비)
   const [bgInput, setBgInput] = useState("#fafaf9");
@@ -310,15 +314,15 @@ export default function Home() {
           </h1>
 
           <p className="text-muted-foreground font-light text-lg max-w-md mx-auto leading-relaxed">
-            내가 좋아한 장면을 모아 나만의 무드 지도를 만드세요.<br />
-            MOODMAP은 당신의 순간과 취향을 지도처럼 저장합니다.
+            좋아하는 순간들을 모아 한 장의 그림으로.<br />
+            MOODMAP으로 복잡함 없이, 오직 사진과 당신의 감각으로만.
           </p>
 
           <div className="flex flex-col items-center gap-3 pt-2">
             {/* 제목 입력 */}
             <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              value={boardTitle}
+              onChange={(e) => setBoardTitle(e.target.value)}
               placeholder="제목을 입력하세요"
               className="w-full max-w-xs mx-auto rounded-full px-4 py-2 text-center border border-border/50 bg-background/70 text-foreground outline-none focus:ring-2 focus:ring-primary/20"
             />
