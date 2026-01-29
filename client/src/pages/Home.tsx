@@ -56,7 +56,7 @@ const drawCover = (
 export default function Home() {
   const PAGE_TITLE = "MOODMAP";
 
-  // ✅ 저장 이미지/파일명에 들어갈 제목(사용자 입력) — 기본값 빈칸
+  // ✅ 저장 이미지/파일명에 들어갈 제목(사용자 입력)
   const [boardTitle, setBoardTitle] = useState("");
 
   // ✅ 보드 색상: 입력값 + 적용값 분리
@@ -66,6 +66,10 @@ export default function Home() {
   // ✅ 제목 색상: 입력값 + 적용값 분리
   const [titleColorInput, setTitleColorInput] = useState("#111827");
   const [titleColor, setTitleColor] = useState("#111827");
+
+  // ✅ 간격/크기: 슬라이더
+  const [gapPx, setGapPx] = useState(16); // 0~40
+  const [cellPx, setCellPx] = useState(360); // 240~560
 
   // 그리드(기본 9칸)
   const [gridItems, setGridItems] = useState<MoodGridItem[]>(
@@ -188,9 +192,11 @@ export default function Home() {
       const cols = 3;
       const rows = Math.ceil(gridItems.length / cols);
 
-      // 출력 크기
-      const cell = 520;
-      const gap = 24;
+      // 출력 크기(슬라이더 반영)
+      const cell = cellPx;
+      const gap = gapPx;
+
+      // 바깥 여백/타이틀/푸터
       const pad = 56;
       const titleH = 90;
       const footerH = 50;
@@ -242,8 +248,8 @@ export default function Home() {
         const x = pad + c * (cell + gap);
         const y = startY + r * (cell + gap);
 
-        // 라운드 클립
-        const radius = 18;
+        // 라운드 클립(크기에 맞춰 적당히)
+        const radius = Math.max(12, Math.min(22, Math.floor(cell * 0.05)));
         ctx.save();
         ctx.beginPath();
         ctx.moveTo(x + radius, y);
@@ -313,7 +319,7 @@ export default function Home() {
           </p>
 
           <div className="flex flex-col items-center gap-4 pt-2">
-            {/* ✅ 제목 입력란 문구 변경 */}
+            {/* 제목 입력 */}
             <input
               value={boardTitle}
               onChange={(e) => setBoardTitle(e.target.value)}
@@ -321,7 +327,7 @@ export default function Home() {
               className="w-full max-w-xs mx-auto rounded-full px-4 py-2 text-center border border-border/50 bg-background/70 text-foreground outline-none focus:ring-2 focus:ring-primary/20"
             />
 
-            {/* ✅ 보드 색상/제목 색상: 가로 배치 */}
+            {/* 보드 색상/제목 색상: 가로 */}
             <div className="flex flex-wrap items-end justify-center gap-8">
               {/* 보드 색상 */}
               <div className="flex flex-col items-center gap-2">
@@ -376,14 +382,49 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="text-xs text-muted-foreground/70">
-              채운 사진: {filledCount} / {gridItems.length}
+            {/* ✅ 간격/크기 슬라이더 */}
+            <div className="w-full max-w-md flex flex-col gap-4 pt-2">
+              {/* 간격 */}
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between text-xs text-muted-foreground/70">
+                  <span>간격</span>
+                  <span>{gapPx}px</span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={40}
+                  step={1}
+                  value={gapPx}
+                  onChange={(e) => setGapPx(parseInt(e.target.value, 10))}
+                  className="w-full"
+                  aria-label="간격 조절"
+                />
+              </div>
+
+              {/* 크기 */}
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between text-xs text-muted-foreground/70">
+                  <span>크기</span>
+                  <span>{cellPx}px</span>
+                </div>
+                <input
+                  type="range"
+                  min={240}
+                  max={560}
+                  step={1}
+                  value={cellPx}
+                  onChange={(e) => setCellPx(parseInt(e.target.value, 10))}
+                  className="w-full"
+                  aria-label="사진 크기 조절"
+                />
+              </div>
             </div>
           </div>
         </header>
 
         {/* Action Bar */}
-        <div className="flex flex-wrap gap-4 justify-center mb-8">
+        <div className="flex flex-wrap gap-4 justify-center mb-3">
           <input
             type="file"
             ref={fileInputRef}
@@ -414,6 +455,11 @@ export default function Home() {
           </Button>
         </div>
 
+        {/* ✅ 채운 사진: Action Bar 아래 / 보드 위 */}
+        <div className="mb-6 text-xs text-muted-foreground/70">
+          채운 사진: {filledCount} / {gridItems.length}
+        </div>
+
         {/* 보드 */}
         <div
           className="w-full p-4 md:p-8 rounded-xl shadow-[0_20px_40px_-15px_rgba(0,0,0,0.08)] mb-24 border"
@@ -435,18 +481,25 @@ export default function Home() {
             <div className="mb-6" />
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div
+            className="grid grid-cols-1 md:grid-cols-3"
+            style={{ gap: `${gapPx}px` }}
+          >
             {gridItems.map((item) => (
               <div
                 key={item.id}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={(e) => handleDrop(e, item.id)}
-                className={`aspect-square relative group rounded-lg overflow-hidden transition-all duration-500 ease-out
+                className={`relative group rounded-lg overflow-hidden transition-all duration-500 ease-out
                   ${
                     item.url
                       ? "bg-transparent shadow-sm"
                       : "bg-secondary/30 border-2 border-dashed border-muted-foreground/10 hover:border-primary/30 hover:bg-secondary/50"
                   }`}
+                style={{
+                  width: "100%",
+                  aspectRatio: "1 / 1",
+                }}
               >
                 <button
                   type="button"
