@@ -60,9 +60,7 @@ const PALETTE = {
     siteTitle: "#0F1E2E",
     siteDesc: "#5B6B7A",
 
-    // ✅ 라이트 보드 기본값: 배경과 자연스럽게 연결되는 톤
     boardDefaultBg: "#F8FAFB",
-
     boardBorder: "rgba(15,30,46,0.10)",
     emptyFill: "rgba(15,30,46,0.035)",
     emptyStroke: "rgba(15,30,46,0.14)",
@@ -70,16 +68,21 @@ const PALETTE = {
     boardTitleDefault: "#111827",
     hint: "rgba(15,30,46,0.55)",
 
-    // ✅ 버튼 톤 (라이트)
+    // 버튼 톤 (라이트)
     btnOutlineBg: "rgba(255,255,255,0.55)",
     btnOutlineBorder: "rgba(15,30,46,0.14)",
     btnOutlineText: "#0F1E2E",
 
-    btnGhostText: "#0F1E2E",
     btnGhostMuted: "rgba(15,30,46,0.55)",
+    btnGhostHoverBg: "rgba(15,30,46,0.06)", // ✅ (1) 라이트: 칸 추가하기 hover 배경
 
     saveBg: "#0F1E2E",
     saveText: "#F6F8F9",
+
+    // ✅ (2) 라이트: 저장 후 토스트 색
+    toastBg: "rgba(255,255,255,0.92)",
+    toastText: "#0F1E2E",
+    toastBorder: "rgba(15,30,46,0.12)",
   },
   dark: {
     siteBg: "#0B141C",
@@ -94,17 +97,22 @@ const PALETTE = {
     boardTitleDefault: "#E6EDF3",
     hint: "rgba(230,237,243,0.55)",
 
-    // ✅ 버튼 톤 (다크)
+    // 버튼 톤 (다크)
     btnOutlineBg: "rgba(17,30,39,0.35)",
     btnOutlineBorder: "rgba(230,237,243,0.16)",
     btnOutlineText: "#E6EDF3",
 
-    btnGhostText: "#E6EDF3",
     btnGhostMuted: "rgba(230,237,243,0.55)",
+    btnGhostHoverBg: "rgba(230,237,243,0.10)", // ✅ (3) 다크: 칸 추가하기 hover 배경
 
-    // 다크 저장 버튼: 너무 하얗게 튀지 않는 “밤바다 CTA”
+    // 다크 저장 버튼: 밤바다 CTA
     saveBg: "#122332",
     saveText: "#E6EDF3",
+
+    // ✅ (4) 다크: 저장 후 토스트 색
+    toastBg: "rgba(17,30,39,0.92)",
+    toastText: "#E6EDF3",
+    toastBorder: "rgba(230,237,243,0.14)",
   },
 } as const;
 
@@ -410,16 +418,40 @@ export default function Home() {
 
   return (
     <div
-      className="min-h-screen font-sans selection:bg-primary/20"
+      className="min-h-screen font-sans selection:bg-primary/20 moodmap-root"
       style={{
         backgroundColor: palette.siteBg,
         color: palette.siteTitle,
+        // ✅ CSS 변수로 hover/토스트 제어
+        ["--ghost-hover-bg" as any]: palette.btnGhostHoverBg,
+        ["--toast-bg" as any]: palette.toastBg,
+        ["--toast-text" as any]: palette.toastText,
+        ["--toast-border" as any]: palette.toastBorder,
       }}
     >
+      {/* ✅ (2)(4) 토스트(sonner) 스타일: 라이트/다크별 배경/글자/테두리 */}
+      <style>{`
+        .moodmap-root [data-sonner-toast]{
+          background: var(--toast-bg) !important;
+          color: var(--toast-text) !important;
+          border: 1px solid var(--toast-border) !important;
+          box-shadow: 0 12px 30px -16px rgba(0,0,0,0.35) !important;
+          backdrop-filter: blur(10px);
+        }
+        .moodmap-root [data-sonner-toast] [data-title],
+        .moodmap-root [data-sonner-toast] [data-description]{
+          color: var(--toast-text) !important;
+        }
+        /* ✅ (1)(3) 칸 추가하기 hover 배경 */
+        .moodmap-ghost:hover{
+          background: var(--ghost-hover-bg) !important;
+        }
+      `}</style>
+
       <main className="container max-w-4xl py-12 md:py-20 px-4 mx-auto flex flex-col items-center">
         {/* Header */}
         <header className="text-center mb-10 space-y-4 w-full relative">
-          {/* ✅ 우측 상단 작은 토글 */}
+          {/* 우측 상단 작은 토글 */}
           <button
             type="button"
             onClick={toggleTheme}
@@ -532,7 +564,6 @@ export default function Home() {
 
             {/* 간격/크기 슬라이더 */}
             <div className="w-full max-w-md flex flex-col gap-4 pt-2">
-              {/* 간격 */}
               <div className="flex flex-col gap-2">
                 <div className="flex items-center justify-between text-xs" style={{ color: palette.siteDesc }}>
                   <span>간격</span>
@@ -541,7 +572,6 @@ export default function Home() {
                 <input type="range" min={0} max={40} step={1} value={gapPx} onChange={(e) => setGapPx(parseInt(e.target.value, 10))} className="w-full" />
               </div>
 
-              {/* 크기 */}
               <div className="flex flex-col gap-2">
                 <div className="flex items-center justify-between text-xs" style={{ color: palette.siteDesc }}>
                   <span>크기</span>
@@ -553,11 +583,11 @@ export default function Home() {
           </div>
         </header>
 
-        {/* Action Bar (버튼 톤 정리) */}
+        {/* Action Bar */}
         <div className="flex flex-wrap gap-4 justify-center mb-3">
           <input type="file" ref={fileInputRef} onChange={handleImageUpload} className="hidden" multiple accept="image/*" />
 
-          {/* ✅ 사진 가져오기 (모드별 outline 톤) */}
+          {/* 사진 가져오기 */}
           <Button
             onClick={() => fileInputRef.current?.click()}
             variant="outline"
@@ -573,12 +603,12 @@ export default function Home() {
             사진 가져오기
           </Button>
 
-          {/* ✅ 칸 추가하기 (모드별 ghost 톤) */}
+          {/* ✅ 칸 추가하기 (hover 배경: CSS로 모드별 처리) */}
           <Button
             onClick={addGridSlot}
             variant="ghost"
             size="lg"
-            className="rounded-full px-6 h-12"
+            className="rounded-full px-6 h-12 moodmap-ghost"
             style={{
               color: palette.btnGhostMuted,
             }}
@@ -588,7 +618,7 @@ export default function Home() {
           </Button>
         </div>
 
-        {/* ✅ 채운 사진: Action Bar 아래 / 보드 위 */}
+        {/* 채운 사진 */}
         <div className="mb-6 text-xs" style={{ color: palette.siteDesc }}>
           채운 사진: {filledCount} / {gridItems.length}
         </div>
@@ -683,7 +713,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Save Button (모드별 CTA 톤) */}
+        {/* Save Button */}
         <div className="fixed bottom-8 left-0 right-0 flex justify-center pointer-events-none z-50">
           <Button
             onClick={exportToImage}
