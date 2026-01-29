@@ -54,17 +54,16 @@ const drawCover = (
 };
 
 export default function Home() {
-  // ✅ 페이지 상단 고정 타이틀
   const PAGE_TITLE = "MOODMAP";
 
   // ✅ 저장 이미지/파일명에 들어갈 제목(사용자 입력) — 기본값 빈칸
   const [boardTitle, setBoardTitle] = useState("");
 
-  // ✅ (1) 보드 배경색: 입력값 + 적용값 분리
+  // ✅ 보드 색상: 입력값 + 적용값 분리
   const [boardBgInput, setBoardBgInput] = useState("#fafaf9");
   const [boardBgColor, setBoardBgColor] = useState("#fafaf9");
 
-  // ✅ (2) 제목 색상: 입력값 + 적용값 분리
+  // ✅ 제목 색상: 입력값 + 적용값 분리
   const [titleColorInput, setTitleColorInput] = useState("#111827");
   const [titleColor, setTitleColor] = useState("#111827");
 
@@ -84,7 +83,7 @@ export default function Home() {
     if (url.startsWith("blob:")) URL.revokeObjectURL(url);
   };
 
-  // ✅ 보드 배경 HEX 적용
+  // ✅ 보드 색상 HEX 적용
   const applyBoardBgIfValid = (next: string) => {
     setBoardBgInput(next);
     const norm = normalizeHex(next);
@@ -155,10 +154,6 @@ export default function Home() {
   };
 
   // 드래그 앤 드롭
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-  };
-
   const handleDrop = (e: React.DragEvent, id: string) => {
     e.preventDefault();
     const files = e.dataTransfer.files;
@@ -210,11 +205,11 @@ export default function Home() {
       const ctx = canvas.getContext("2d");
       if (!ctx) throw new Error("Canvas context not available");
 
-      // ✅ 배경: 보드 배경색만 적용
+      // 배경(보드 색상)
       ctx.fillStyle = boardBgColor;
       ctx.fillRect(0, 0, width, height);
 
-      // ✅ 저장 이미지 제목: 입력 있으면 입력값, 없으면 MOODMAP
+      // 저장 이미지 제목
       const exportTitle = boardTitle || PAGE_TITLE;
 
       // 제목 색상
@@ -235,9 +230,7 @@ export default function Home() {
             try {
               const img = await loadImage(it.url!);
               loadedMap.set(it.id, img);
-            } catch {
-              // 로드 실패는 빈칸 처리
-            }
+            } catch {}
           })
       );
 
@@ -267,7 +260,6 @@ export default function Home() {
         if (img) {
           drawCover(ctx, img, x, y, cell, cell);
         } else {
-          // 빈칸 스타일(보드 배경 기준으로 은은하게)
           ctx.fillStyle = "rgba(0,0,0,0.04)";
           ctx.fillRect(x, y, cell, cell);
           ctx.strokeStyle = "rgba(0,0,0,0.12)";
@@ -307,12 +299,10 @@ export default function Home() {
   };
 
   return (
-    // ✅ 페이지 전체 배경은 고정(보드 배경 변경해도 페이지는 그대로)
     <div className="min-h-screen text-foreground font-sans selection:bg-primary/20 bg-background">
       <main className="container max-w-4xl py-12 md:py-20 px-4 mx-auto flex flex-col items-center">
         {/* Header */}
         <header className="text-center mb-10 space-y-4 w-full">
-          {/* 페이지 상단은 항상 MOODMAP 고정 */}
           <h1 className="text-4xl md:text-5xl font-serif font-light tracking-tight text-foreground/90">
             {PAGE_TITLE}
           </h1>
@@ -323,7 +313,7 @@ export default function Home() {
           </p>
 
           <div className="flex flex-col items-center gap-4 pt-2">
-            {/* 보드 제목 입력 */}
+            {/* ✅ 제목 입력란 문구 변경 */}
             <input
               value={boardTitle}
               onChange={(e) => setBoardTitle(e.target.value)}
@@ -331,56 +321,59 @@ export default function Home() {
               className="w-full max-w-xs mx-auto rounded-full px-4 py-2 text-center border border-border/50 bg-background/70 text-foreground outline-none focus:ring-2 focus:ring-primary/20"
             />
 
-            {/* ✅ 보드 배경색(저장 영역에만 적용) */}
-            <div className="flex flex-col items-center gap-2">
-              <div className="text-xs text-muted-foreground/70">보드 배경색</div>
-              <div className="flex items-center gap-3">
-                <input
-                  type="color"
-                  value={boardBgColor}
-                  onChange={(e) => applyBoardBgIfValid(e.target.value)}
-                  className="w-10 h-10 p-0 border-0 bg-transparent cursor-pointer"
-                  aria-label="보드 배경색 선택"
-                  title="보드 배경색 선택"
-                />
-                <input
-                  value={boardBgInput}
-                  onChange={(e) => applyBoardBgIfValid(e.target.value)}
-                  placeholder="#fafaf9"
-                  className="w-36 rounded-full px-3 py-2 text-center border border-border/50 bg-background/70 text-foreground outline-none focus:ring-2 focus:ring-primary/20"
-                />
-              </div>
-              {boardBgInput.trim() && !normalizeHex(boardBgInput) ? (
-                <div className="text-xs text-muted-foreground/60">
-                  HEX 형식으로 입력해줘 (예: #fafaf9 또는 fafaf9)
+            {/* ✅ 보드 색상/제목 색상: 가로 배치 */}
+            <div className="flex flex-wrap items-end justify-center gap-8">
+              {/* 보드 색상 */}
+              <div className="flex flex-col items-center gap-2">
+                <div className="text-xs text-muted-foreground/70">보드 색상</div>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="color"
+                    value={boardBgColor}
+                    onChange={(e) => applyBoardBgIfValid(e.target.value)}
+                    className="w-10 h-10 p-0 border-0 bg-transparent cursor-pointer"
+                    aria-label="보드 색상 선택"
+                    title="보드 색상 선택"
+                  />
+                  <input
+                    value={boardBgInput}
+                    onChange={(e) => applyBoardBgIfValid(e.target.value)}
+                    placeholder="#fafaf9"
+                    className="w-36 rounded-full px-3 py-2 text-center border border-border/50 bg-background/70 text-foreground outline-none focus:ring-2 focus:ring-primary/20"
+                  />
                 </div>
-              ) : null}
-            </div>
+                {boardBgInput.trim() && !normalizeHex(boardBgInput) ? (
+                  <div className="text-xs text-muted-foreground/60">
+                    HEX 형식으로 입력해줘 (예: #fafaf9 또는 fafaf9)
+                  </div>
+                ) : null}
+              </div>
 
-            {/* ✅ 제목 색상(저장 이미지 제목 + 보드 제목) */}
-            <div className="flex flex-col items-center gap-2">
-              <div className="text-xs text-muted-foreground/70">제목 색상</div>
-              <div className="flex items-center gap-3">
-                <input
-                  type="color"
-                  value={titleColor}
-                  onChange={(e) => applyTitleColorIfValid(e.target.value)}
-                  className="w-10 h-10 p-0 border-0 bg-transparent cursor-pointer"
-                  aria-label="제목 색상 선택"
-                  title="제목 색상 선택"
-                />
-                <input
-                  value={titleColorInput}
-                  onChange={(e) => applyTitleColorIfValid(e.target.value)}
-                  placeholder="#111827"
-                  className="w-36 rounded-full px-3 py-2 text-center border border-border/50 bg-background/70 text-foreground outline-none focus:ring-2 focus:ring-primary/20"
-                />
-              </div>
-              {titleColorInput.trim() && !normalizeHex(titleColorInput) ? (
-                <div className="text-xs text-muted-foreground/60">
-                  HEX 형식으로 입력해줘 (예: #111827 또는 111827)
+              {/* 제목 색상 */}
+              <div className="flex flex-col items-center gap-2">
+                <div className="text-xs text-muted-foreground/70">제목 색상</div>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="color"
+                    value={titleColor}
+                    onChange={(e) => applyTitleColorIfValid(e.target.value)}
+                    className="w-10 h-10 p-0 border-0 bg-transparent cursor-pointer"
+                    aria-label="제목 색상 선택"
+                    title="제목 색상 선택"
+                  />
+                  <input
+                    value={titleColorInput}
+                    onChange={(e) => applyTitleColorIfValid(e.target.value)}
+                    placeholder="#111827"
+                    className="w-36 rounded-full px-3 py-2 text-center border border-border/50 bg-background/70 text-foreground outline-none focus:ring-2 focus:ring-primary/20"
+                  />
                 </div>
-              ) : null}
+                {titleColorInput.trim() && !normalizeHex(titleColorInput) ? (
+                  <div className="text-xs text-muted-foreground/60">
+                    HEX 형식으로 입력해줘 (예: #111827 또는 111827)
+                  </div>
+                ) : null}
+              </div>
             </div>
 
             <div className="text-xs text-muted-foreground/70">
@@ -421,7 +414,7 @@ export default function Home() {
           </Button>
         </div>
 
-        {/* ✅ 보드(저장/미리보기 영역) — 배경색은 여기만 적용 */}
+        {/* 보드 */}
         <div
           className="w-full p-4 md:p-8 rounded-xl shadow-[0_20px_40px_-15px_rgba(0,0,0,0.08)] mb-24 border"
           style={{
@@ -429,7 +422,6 @@ export default function Home() {
             borderColor: "rgba(0,0,0,0.06)",
           }}
         >
-          {/* 보드 내부 제목: 입력 없으면 숨김 */}
           {boardTitle ? (
             <div className="text-center mb-6">
               <div
@@ -456,7 +448,6 @@ export default function Home() {
                       : "bg-secondary/30 border-2 border-dashed border-muted-foreground/10 hover:border-primary/30 hover:bg-secondary/50"
                   }`}
               >
-                {/* 칸 삭제 버튼 */}
                 <button
                   type="button"
                   onClick={() => removeGridSlot(item.id)}
