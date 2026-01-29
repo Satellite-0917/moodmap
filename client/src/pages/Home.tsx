@@ -327,7 +327,7 @@ export default function Home() {
             <input
               value={boardTitle}
               onChange={(e) => setBoardTitle(e.target.value)}
-              placeholder="저장 이미지에 들어갈 제목을 입력하세요 (선택)"
+              placeholder="제목을 입력하세요 (선택)"
               className="w-full max-w-xs mx-auto rounded-full px-4 py-2 text-center border border-border/50 bg-background/70 text-foreground outline-none focus:ring-2 focus:ring-primary/20"
             />
 
