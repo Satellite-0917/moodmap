@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import html2canvas from "html2canvas";
 import { Download, Image as ImageIcon, Plus, Trash2, Upload, X } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 interface MoodGridItem {
@@ -17,22 +17,17 @@ const BG_PRESETS = [
   { label: "Black", value: "#0b0b0f" },
 ];
 
-// ✅ 저장 성공률을 올리기 위한 유틸(이미지 로딩/디코딩 완료 대기)
+// ✅ 이미지 로딩/디코딩 완료까지 대기 (캡처 성공률↑)
 const waitForImages = async (root: HTMLElement) => {
   const imgs = Array.from(root.querySelectorAll("img"));
-
   await Promise.all(
     imgs.map(async (img) => {
-      // 로딩 완료까지 기다리기
       if (!img.complete) {
         await new Promise<void>((res, rej) => {
           img.onload = () => res();
           img.onerror = () => rej();
         });
       }
-
-      // decode()가 있으면 디코딩까지 기다리기 (캡처 실패 줄임)
-      // 일부 환경에서 decode가 reject될 수 있어 try/catch로 무시
       // @ts-ignore
       if (typeof img.decode === "function") {
         try {
@@ -44,14 +39,45 @@ const waitForImages = async (root: HTMLElement) => {
   );
 };
 
-// ✅ 레이아웃/렌더 안정화용(다음 프레임 대기)
 const nextFrame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
+
+// ✅ HEX 유효성 체크 & 정규화
+const normalizeHex = (raw: string) => {
+  const v = raw.trim();
+
+  // #RGB / #RRGGBB
+  const withHash = v.startsWith("#") ? v : `#${v}`;
+
+  if (/^#[0-9a-fA-F]{3}$/.test(withHash)) {
+    const r = withHash[1];
+    const g = withHash[2];
+    const b = withHash[3];
+    return `#${r}${r}${g}${g}${b}${b}`.toLowerCase();
+  }
+
+  if (/^#[0-9a-fA-F]{6}$/.test(withHash)) {
+    return withHash.toLowerCase();
+  }
+
+  return null;
+};
+
+const isDarkColor = (hex: string) => {
+  const h = normalizeHex(hex) || "#ffffff";
+  const r = parseInt(h.slice(1, 3), 16);
+  const g = parseInt(h.slice(3, 5), 16);
+  const b = parseInt(h.slice(5, 7), 16);
+  // relative luminance-ish
+  const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  return luminance < 0.4;
+};
 
 export default function Home() {
   // 제목(저장 파일명에도 반영)
   const [title, setTitle] = useState("MOODMAP");
 
-  // 배경색 선택
+  // ✅ 배경색: 입력값과 실제 적용값을 분리
+  const [bgInput, setBgInput] = useState("#fafaf9");
   const [bgColor, setBgColor] = useState("#fafaf9");
 
   // 그리드(기본 9칸)
@@ -65,12 +91,19 @@ export default function Home() {
 
   const filledCount = useMemo(() => gridItems.filter((i) => !!i.url).length, [gridItems]);
 
+  const darkBg = useMemo(() => isDarkColor(bgColor), [bgColor]);
+
   // ✅ blob URL 메모리 누수 방지: url 교체/삭제 시 revoke
   const revokeIfNeeded = (url: string | null) => {
     if (!url) return;
-    // createObjectURL로 만든 blob: URL만 revoke
     if (url.startsWith("blob:")) URL.revokeObjectURL(url);
   };
+
+  // ✅ bgInput이 유효해지면 bgColor에 반영
+  useEffect(() => {
+    const norm = normalizeHex(bgInput);
+    if (norm) setBgColor(norm);
+  }, [bgInput]);
 
   // 이미지 업로드: 빈칸부터 채우고 남으면 칸 추가
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -118,15 +151,12 @@ export default function Home() {
     setGridItems((prev) => [...prev, { id: crypto.randomUUID(), url: null }]);
   };
 
-  // ✅ 칸 삭제(추가한 칸도 줄일 수 있도록)
+  // 칸 삭제(추가한 칸도 줄일 수 있도록)
   const removeGridSlot = (id: string) => {
     setGridItems((prev) => {
       if (prev.length <= 1) return prev;
-
-      // 삭제되는 칸의 blob url revoke
       const removing = prev.find((x) => x.id === id);
       if (removing?.url) revokeIfNeeded(removing.url);
-
       return prev.filter((x) => x.id !== id);
     });
   };
@@ -147,8 +177,6 @@ export default function Home() {
         setGridItems((items) =>
           items.map((item) => {
             if (item.id !== id) return item;
-
-            // 기존 이미지가 있으면 revoke 후 교체
             revokeIfNeeded(item.url);
             return { ...item, url };
           })
@@ -157,28 +185,66 @@ export default function Home() {
     }
   };
 
-  // ✅ 저장: JPG로 저장(모바일 성공률↑, 용량↓)
+  // ✅ 저장: oklch 에러 해결 포함
   const exportToImage = async () => {
     if (!gridRef.current) return;
 
     try {
       setIsExporting(true);
 
-      // ✅ 1) 캡처 전 이미지 로딩/디코딩 완료 대기
+      // 1) 이미지 로딩/디코딩 대기
       await waitForImages(gridRef.current);
 
-      // ✅ 2) 한 프레임 대기 (레이아웃 안정화)
+      // 2) 한 프레임 대기 (레이아웃 안정화)
       await nextFrame();
 
-      // 캔버스 크기/메모리 이슈 방지용 scale 조정
+      // 3) scale 조절 (메모리 이슈 방지)
       const isMobile = window.innerWidth < 900;
       const scale = isMobile ? 1 : 1.5;
 
       const canvas = await html2canvas(gridRef.current, {
         scale,
-        backgroundColor: bgColor, // 배경색 반영
-        useCORS: false, // blob URL 업로드라면 보통 불필요(오히려 이슈 줄임)
+        backgroundColor: bgColor,
+        useCORS: false,
         logging: false,
+
+        // ✅ 핵심: oklch() 같은 색상 함수를 캡처 중엔 안 쓰도록 "캡처용 스타일" 강제
+        onclone: (doc) => {
+          const root = doc.querySelector('[data-capture-root="true"]') as HTMLElement | null;
+          if (!root) return;
+
+          // 캡처 중 hover 버튼/오버레이로 인한 스타일 섞임 방지(안전)
+          const hideEls = Array.from(root.querySelectorAll('[data-capture-hide="true"]'));
+          hideEls.forEach((el) => ((el as HTMLElement).style.display = "none"));
+
+          const style = doc.createElement("style");
+          const textColor = isDarkColor(bgColor) ? "#ffffff" : "#111827";
+          const mutedColor = isDarkColor(bgColor) ? "rgba(255,255,255,0.35)" : "rgba(17,24,39,0.35)";
+          const borderColor = isDarkColor(bgColor) ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)";
+
+          style.textContent = `
+            /* 캡처 영역 내부: oklch/var 기반 스타일이 섞여도 안전한 값으로 덮기 */
+            [data-capture-root="true"] {
+              background: ${bgColor} !important;
+            }
+            [data-capture-root="true"] * {
+              text-shadow: none !important;
+              box-shadow: none !important;
+              transition: none !important;
+              animation: none !important;
+            }
+            [data-capture-root="true"] .capture-text {
+              color: ${textColor} !important;
+            }
+            [data-capture-root="true"] .capture-muted {
+              color: ${mutedColor} !important;
+            }
+            [data-capture-root="true"] .capture-border {
+              border-color: ${borderColor} !important;
+            }
+          `;
+          doc.head.appendChild(style);
+        },
       });
 
       const date = new Date().toISOString().slice(0, 10);
@@ -187,12 +253,12 @@ export default function Home() {
         .replace(/[\\/:*?"<>|]/g, "")
         .slice(0, 30);
 
-      // ✅ toBlob 시도
+      // 4) JPG blob 생성
       let blob: Blob | null = await new Promise((resolve) =>
         canvas.toBlob((b) => resolve(b), "image/jpeg", 0.92)
       );
 
-      // ✅ toBlob이 null이면 fallback: dataURL로라도 저장 시도
+      // ✅ toBlob이 null이면 fallback: dataURL로라도 저장
       if (!blob) {
         const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
         const link = document.createElement("a");
@@ -201,7 +267,6 @@ export default function Home() {
         document.body.appendChild(link);
         link.click();
         link.remove();
-
         toast.success("이미지로 저장되었습니다!");
         return;
       }
@@ -250,26 +315,51 @@ export default function Home() {
               className="w-full max-w-xs mx-auto rounded-full px-4 py-2 text-center border border-border/50 bg-background/70 text-foreground outline-none focus:ring-2 focus:ring-primary/20"
             />
 
-            {/* 배경색 선택 */}
-            <div className="flex flex-wrap gap-2 justify-center">
-              {BG_PRESETS.map((p) => (
-                <button
-                  key={p.value}
-                  type="button"
-                  onClick={() => setBgColor(p.value)}
-                  className="flex items-center gap-2 rounded-full px-3 py-1 border border-border/40 bg-background/70 hover:bg-background transition"
-                >
-                  <span
-                    className="inline-block w-4 h-4 rounded-full border border-border/40"
-                    style={{ backgroundColor: p.value }}
-                  />
-                  <span className="text-sm text-muted-foreground">{p.label}</span>
-                </button>
-              ))}
-            </div>
+            {/* ✅ 배경색: 직접 선택 + HEX 입력 + (옵션) 프리셋 */}
+            <div className="flex flex-col items-center gap-3">
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-muted-foreground">배경색</span>
 
-            <div className="text-xs text-muted-foreground/70">
-              채운 사진: {filledCount} / {gridItems.length}
+                {/* 색상 피커 */}
+                <input
+                  type="color"
+                  value={bgColor}
+                  onChange={(e) => setBgInput(e.target.value)}
+                  className="w-10 h-10 p-0 border-0 bg-transparent cursor-pointer"
+                  aria-label="배경색 선택"
+                  title="배경색 선택"
+                />
+
+                {/* HEX 직접 입력 */}
+                <input
+                  value={bgInput}
+                  onChange={(e) => setBgInput(e.target.value)}
+                  placeholder="#fafaf9"
+                  className="w-36 rounded-full px-3 py-2 text-center border border-border/50 bg-background/70 text-foreground outline-none focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
+
+              {/* 프리셋(빠른 선택용) */}
+              <div className="flex flex-wrap gap-2 justify-center">
+                {BG_PRESETS.map((p) => (
+                  <button
+                    key={p.value}
+                    type="button"
+                    onClick={() => setBgInput(p.value)}
+                    className="flex items-center gap-2 rounded-full px-3 py-1 border border-border/40 bg-background/70 hover:bg-background transition"
+                  >
+                    <span
+                      className="inline-block w-4 h-4 rounded-full border border-border/40"
+                      style={{ backgroundColor: p.value }}
+                    />
+                    <span className="text-sm text-muted-foreground">{p.label}</span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="text-xs text-muted-foreground/70">
+                채운 사진: {filledCount} / {gridItems.length}
+              </div>
             </div>
           </div>
         </header>
@@ -309,15 +399,16 @@ export default function Home() {
         {/* Export 대상 영역 */}
         <div
           ref={gridRef}
-          className="w-full p-4 md:p-8 rounded-xl shadow-[0_20px_40px_-15px_rgba(0,0,0,0.08)] mb-24 border"
+          data-capture-root="true"
+          className="w-full p-4 md:p-8 rounded-xl shadow-[0_20px_40px_-15px_rgba(0,0,0,0.08)] mb-24 border capture-border"
           style={{
-            backgroundColor: bgColor, // ✅ 캡처 영역 배경도 동일하게
+            backgroundColor: bgColor,
             borderColor: "rgba(0,0,0,0.06)",
           }}
         >
-          {/* ✅ 저장 이미지에 제목도 같이 들어가게 */}
+          {/* 저장 이미지에 제목도 같이 들어가게 */}
           <div className="text-center mb-6">
-            <div className="text-2xl md:text-3xl font-serif font-light tracking-tight">
+            <div className={`text-2xl md:text-3xl font-serif font-light tracking-tight capture-text`}>
               {title || "MOODMAP"}
             </div>
           </div>
@@ -335,13 +426,14 @@ export default function Home() {
                       : "bg-secondary/30 border-2 border-dashed border-muted-foreground/10 hover:border-primary/30 hover:bg-secondary/50"
                   }`}
               >
-                {/* ✅ 칸 삭제 버튼 (hover 시 우상단) */}
+                {/* 칸 삭제 버튼 (캡처에서는 숨김) */}
                 <button
                   type="button"
                   onClick={() => removeGridSlot(item.id)}
                   className="absolute top-2 right-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity"
                   aria-label="칸 삭제"
                   title="칸 삭제"
+                  data-capture-hide="true"
                 >
                   <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-background/80 border border-border/40 shadow-sm hover:bg-background">
                     <X className="w-4 h-4 text-muted-foreground" />
@@ -355,7 +447,11 @@ export default function Home() {
                       alt="Mood"
                       className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                     />
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100">
+                    {/* 삭제 오버레이 (캡처에서는 숨김) */}
+                    <div
+                      className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100"
+                      data-capture-hide="true"
+                    >
                       <Button
                         variant="destructive"
                         size="icon"
@@ -370,6 +466,7 @@ export default function Home() {
                   <div
                     className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground/40 cursor-pointer"
                     onClick={() => fileInputRef.current?.click()}
+                    data-capture-hide="true"
                   >
                     <ImageIcon className="w-8 h-8 mb-2 opacity-50" />
                     <span className="text-sm font-light">Drop or Click</span>
@@ -379,7 +476,7 @@ export default function Home() {
             ))}
           </div>
 
-          <div className="text-center mt-8 text-xs text-muted-foreground/30 font-serif tracking-widest uppercase">
+          <div className="text-center mt-8 text-xs font-serif tracking-widest uppercase capture-muted">
             Created with MoodMap
           </div>
         </div>
@@ -402,6 +499,11 @@ export default function Home() {
             )}
           </Button>
         </div>
+
+        {/* (선택) 어두운 배경일 때 안내가 너무 안 보이면 대비용 */}
+        {darkBg ? (
+          <div className="sr-only">Dark background enabled</div>
+        ) : null}
       </main>
     </div>
   );
