@@ -74,15 +74,22 @@ const PALETTE = {
     btnOutlineText: "#0F1E2E",
 
     btnGhostMuted: "rgba(15,30,46,0.55)",
-    btnGhostHoverBg: "rgba(15,30,46,0.06)", // ✅ (1) 라이트: 칸 추가하기 hover 배경
+    btnGhostHoverBg: "rgba(15,30,46,0.06)",
 
     saveBg: "#0F1E2E",
     saveText: "#F6F8F9",
 
-    // ✅ (2) 라이트: 저장 후 토스트 색
-    toastBg: "rgba(255,255,255,0.92)",
-    toastText: "#0F1E2E",
-    toastBorder: "rgba(15,30,46,0.12)",
+    // ✅ 성공 토스트 (라이트)
+    toastSuccessBg: "rgba(255,255,255,0.92)",
+    toastSuccessText: "#0F1E2E",
+    toastSuccessBorder: "rgba(15,30,46,0.12)",
+    toastSuccessIcon: "#0F1E2E",
+
+    // ✅ 에러 토스트 (라이트)
+    toastErrorBg: "rgba(255,255,255,0.92)",
+    toastErrorText: "#0F1E2E",
+    toastErrorBorder: "rgba(176, 34, 34, 0.25)",
+    toastErrorIcon: "#B02222",
   },
   dark: {
     siteBg: "#0B141C",
@@ -103,16 +110,23 @@ const PALETTE = {
     btnOutlineText: "#E6EDF3",
 
     btnGhostMuted: "rgba(230,237,243,0.55)",
-    btnGhostHoverBg: "rgba(230,237,243,0.10)", // ✅ (3) 다크: 칸 추가하기 hover 배경
+    btnGhostHoverBg: "rgba(230,237,243,0.10)",
 
     // 다크 저장 버튼: 밤바다 CTA
     saveBg: "#122332",
     saveText: "#E6EDF3",
 
-    // ✅ (4) 다크: 저장 후 토스트 색
-    toastBg: "rgba(17,30,39,0.92)",
-    toastText: "#E6EDF3",
-    toastBorder: "rgba(230,237,243,0.14)",
+    // ✅ 성공 토스트 (다크)
+    toastSuccessBg: "rgba(17,30,39,0.92)",
+    toastSuccessText: "#E6EDF3",
+    toastSuccessBorder: "rgba(230,237,243,0.14)",
+    toastSuccessIcon: "#E6EDF3",
+
+    // ✅ 에러 토스트 (다크)
+    toastErrorBg: "rgba(17,30,39,0.92)",
+    toastErrorText: "#E6EDF3",
+    toastErrorBorder: "rgba(255, 99, 99, 0.28)",
+    toastErrorIcon: "#FF6363",
   },
 } as const;
 
@@ -407,10 +421,17 @@ export default function Home() {
       link.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
 
-      toast.success("이미지로 저장되었습니다!");
+      // ✅ 성공 토스트: 타입별 className 부여
+      toast.success("이미지로 저장되었습니다!", {
+        className: "moodmap-toast moodmap-toast--success",
+      });
     } catch (error) {
       console.error("Export failed:", error);
-      toast.error("저장에 실패했습니다.");
+
+      // ✅ 에러 토스트: 타입별 className 부여
+      toast.error("저장에 실패했습니다.", {
+        className: "moodmap-toast moodmap-toast--error",
+      });
     } finally {
       setIsExporting(false);
     }
@@ -422,27 +443,60 @@ export default function Home() {
       style={{
         backgroundColor: palette.siteBg,
         color: palette.siteTitle,
+
         // ✅ CSS 변수로 hover/토스트 제어
         ["--ghost-hover-bg" as any]: palette.btnGhostHoverBg,
-        ["--toast-bg" as any]: palette.toastBg,
-        ["--toast-text" as any]: palette.toastText,
-        ["--toast-border" as any]: palette.toastBorder,
+
+        // ✅ 성공 토스트 변수
+        ["--toast-success-bg" as any]: palette.toastSuccessBg,
+        ["--toast-success-text" as any]: palette.toastSuccessText,
+        ["--toast-success-border" as any]: palette.toastSuccessBorder,
+        ["--toast-success-icon" as any]: palette.toastSuccessIcon,
+
+        // ✅ 에러 토스트 변수
+        ["--toast-error-bg" as any]: palette.toastErrorBg,
+        ["--toast-error-text" as any]: palette.toastErrorText,
+        ["--toast-error-border" as any]: palette.toastErrorBorder,
+        ["--toast-error-icon" as any]: palette.toastErrorIcon,
       }}
     >
-      {/* ✅ (2)(4) 토스트(sonner) 스타일: 라이트/다크별 배경/글자/테두리 */}
+      {/* ✅ 토스트(sonner) 스타일: 성공/에러 분리 + 아이콘 컬러까지 */}
       <style>{`
-        .moodmap-root [data-sonner-toast]{
-          background: var(--toast-bg) !important;
-          color: var(--toast-text) !important;
-          border: 1px solid var(--toast-border) !important;
+        /* 공통 토스트 베이스 */
+        .moodmap-root [data-sonner-toast].moodmap-toast{
           box-shadow: 0 12px 30px -16px rgba(0,0,0,0.35) !important;
           backdrop-filter: blur(10px);
         }
-        .moodmap-root [data-sonner-toast] [data-title],
-        .moodmap-root [data-sonner-toast] [data-description]{
-          color: var(--toast-text) !important;
+
+        /* ✅ 성공 토스트 */
+        .moodmap-root [data-sonner-toast].moodmap-toast--success{
+          background: var(--toast-success-bg) !important;
+          color: var(--toast-success-text) !important;
+          border: 1px solid var(--toast-success-border) !important;
         }
-        /* ✅ (1)(3) 칸 추가하기 hover 배경 */
+        .moodmap-root [data-sonner-toast].moodmap-toast--success [data-title],
+        .moodmap-root [data-sonner-toast].moodmap-toast--success [data-description]{
+          color: var(--toast-success-text) !important;
+        }
+        .moodmap-root [data-sonner-toast].moodmap-toast--success svg{
+          color: var(--toast-success-icon) !important;
+        }
+
+        /* ✅ 에러 토스트 */
+        .moodmap-root [data-sonner-toast].moodmap-toast--error{
+          background: var(--toast-error-bg) !important;
+          color: var(--toast-error-text) !important;
+          border: 1px solid var(--toast-error-border) !important;
+        }
+        .moodmap-root [data-sonner-toast].moodmap-toast--error [data-title],
+        .moodmap-root [data-sonner-toast].moodmap-toast--error [data-description]{
+          color: var(--toast-error-text) !important;
+        }
+        .moodmap-root [data-sonner-toast].moodmap-toast--error svg{
+          color: var(--toast-error-icon) !important;
+        }
+
+        /* ✅ 칸 추가하기 hover 배경 */
         .moodmap-ghost:hover{
           background: var(--ghost-hover-bg) !important;
         }
@@ -569,7 +623,15 @@ export default function Home() {
                   <span>간격</span>
                   <span>{gapPx}px</span>
                 </div>
-                <input type="range" min={0} max={40} step={1} value={gapPx} onChange={(e) => setGapPx(parseInt(e.target.value, 10))} className="w-full" />
+                <input
+                  type="range"
+                  min={0}
+                  max={40}
+                  step={1}
+                  value={gapPx}
+                  onChange={(e) => setGapPx(parseInt(e.target.value, 10))}
+                  className="w-full"
+                />
               </div>
 
               <div className="flex flex-col gap-2">
@@ -577,7 +639,15 @@ export default function Home() {
                   <span>크기</span>
                   <span>{cellPx}px</span>
                 </div>
-                <input type="range" min={240} max={560} step={1} value={cellPx} onChange={(e) => setCellPx(parseInt(e.target.value, 10))} className="w-full" />
+                <input
+                  type="range"
+                  min={240}
+                  max={560}
+                  step={1}
+                  value={cellPx}
+                  onChange={(e) => setCellPx(parseInt(e.target.value, 10))}
+                  className="w-full"
+                />
               </div>
             </div>
           </div>
@@ -603,7 +673,7 @@ export default function Home() {
             사진 가져오기
           </Button>
 
-          {/* ✅ 칸 추가하기 (hover 배경: CSS로 모드별 처리) */}
+          {/* 칸 추가하기 */}
           <Button
             onClick={addGridSlot}
             variant="ghost"
