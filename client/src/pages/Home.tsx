@@ -59,18 +59,33 @@ const PALETTE = {
     siteBg: "#F6F8F9",
     siteTitle: "#0F1E2E",
     siteDesc: "#5B6B7A",
-    boardDefaultBg: "#FAFAF7",
-    boardBorder: "rgba(0,0,0,0.06)",
-    emptyFill: "rgba(0,0,0,0.04)",
-    emptyStroke: "rgba(0,0,0,0.12)",
-    footer: "rgba(17,24,39,0.35)",
+
+    // ✅ 라이트 보드 기본값: 배경과 자연스럽게 연결되는 톤
+    boardDefaultBg: "#F8FAFB",
+
+    boardBorder: "rgba(15,30,46,0.10)",
+    emptyFill: "rgba(15,30,46,0.035)",
+    emptyStroke: "rgba(15,30,46,0.14)",
+    footer: "rgba(15,30,46,0.30)",
     boardTitleDefault: "#111827",
     hint: "rgba(15,30,46,0.55)",
+
+    // ✅ 버튼 톤 (라이트)
+    btnOutlineBg: "rgba(255,255,255,0.55)",
+    btnOutlineBorder: "rgba(15,30,46,0.14)",
+    btnOutlineText: "#0F1E2E",
+
+    btnGhostText: "#0F1E2E",
+    btnGhostMuted: "rgba(15,30,46,0.55)",
+
+    saveBg: "#0F1E2E",
+    saveText: "#F6F8F9",
   },
   dark: {
     siteBg: "#0B141C",
     siteTitle: "#E6EDF3",
     siteDesc: "#8FA1B3",
+
     boardDefaultBg: "#111E27",
     boardBorder: "rgba(230,237,243,0.10)",
     emptyFill: "rgba(230,237,243,0.06)",
@@ -78,6 +93,18 @@ const PALETTE = {
     footer: "rgba(230,237,243,0.35)",
     boardTitleDefault: "#E6EDF3",
     hint: "rgba(230,237,243,0.55)",
+
+    // ✅ 버튼 톤 (다크)
+    btnOutlineBg: "rgba(17,30,39,0.35)",
+    btnOutlineBorder: "rgba(230,237,243,0.16)",
+    btnOutlineText: "#E6EDF3",
+
+    btnGhostText: "#E6EDF3",
+    btnGhostMuted: "rgba(230,237,243,0.55)",
+
+    // 다크 저장 버튼: 너무 하얗게 튀지 않는 “밤바다 CTA”
+    saveBg: "#122332",
+    saveText: "#E6EDF3",
   },
 } as const;
 
@@ -87,7 +114,7 @@ type Theme = "light" | "dark";
 export default function Home() {
   const PAGE_TITLE = "MOODMAP";
 
-  // ✅ (A) 기본은 시스템 따라감, 한 번 토글하면 사용자 선택이 우선
+  // ✅ 기본은 시스템 따라감, 토글하면 사용자 선택이 우선
   const [themePref, setThemePref] = useState<ThemePref>("system");
   const [systemTheme, setSystemTheme] = useState<Theme>("light");
 
@@ -95,13 +122,13 @@ export default function Home() {
   const [boardTitle, setBoardTitle] = useState("");
 
   // ✅ 보드 색상: 입력값 + 적용값 분리 (사용자 커스텀 여부 추적)
-  const [boardBgInput, setBoardBgInput] = useState("#FAFAF7");
-  const [boardBgColor, setBoardBgColor] = useState("#FAFAF7");
+  const [boardBgInput, setBoardBgInput] = useState(PALETTE.light.boardDefaultBg);
+  const [boardBgColor, setBoardBgColor] = useState(PALETTE.light.boardDefaultBg);
   const [boardBgTouched, setBoardBgTouched] = useState(false);
 
   // ✅ 보드 제목 색상: 입력값 + 적용값 분리 (사용자 커스텀 여부 추적)
-  const [titleColorInput, setTitleColorInput] = useState("#111827");
-  const [titleColor, setTitleColor] = useState("#111827");
+  const [titleColorInput, setTitleColorInput] = useState(PALETTE.light.boardTitleDefault);
+  const [titleColor, setTitleColor] = useState(PALETTE.light.boardTitleDefault);
   const [titleColorTouched, setTitleColorTouched] = useState(false);
 
   // ✅ 간격/크기: 슬라이더
@@ -126,15 +153,13 @@ export default function Home() {
 
   const palette = PALETTE[theme];
 
-  // ✅ (A-1) 시스템 다크/라이트 감지 + 로컬 설정 불러오기
+  // ✅ 시스템 다크/라이트 감지 + 로컬 설정 불러오기
   useEffect(() => {
-    // 1) 시스템 테마 감지
     const mq = window.matchMedia?.("(prefers-color-scheme: dark)");
     const updateSystem = () => setSystemTheme(mq?.matches ? "dark" : "light");
     updateSystem();
     mq?.addEventListener?.("change", updateSystem);
 
-    // 2) 저장된 사용자 선택 불러오기
     const saved = (localStorage.getItem("moodmap-theme") as ThemePref | null) ?? "system";
     if (saved === "light" || saved === "dark" || saved === "system") {
       setThemePref(saved);
@@ -143,7 +168,7 @@ export default function Home() {
     return () => mq?.removeEventListener?.("change", updateSystem);
   }, []);
 
-  // ✅ (A-2) 테마 바뀔 때, "사용자가 안 만진 값"만 기본값으로 따라가게
+  // ✅ 테마 바뀔 때, "사용자가 안 만진 값"만 기본값으로 따라가게
   useEffect(() => {
     if (!boardBgTouched) {
       const next = palette.boardDefaultBg;
@@ -156,7 +181,7 @@ export default function Home() {
       setTitleColorInput(next);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [theme]); // palette는 theme에 종속
+  }, [theme]);
 
   // ✅ blob URL 메모리 누수 방지
   const revokeIfNeeded = (url: string | null) => {
@@ -180,7 +205,7 @@ export default function Home() {
     if (norm) setTitleColor(norm);
   };
 
-  // ✅ 라이트/다크 토글 (UI는 2단이지만, 최초는 시스템을 따름)
+  // ✅ 라이트/다크 토글
   const toggleTheme = () => {
     const next: Theme = theme === "dark" ? "light" : "dark";
     setThemePref(next);
@@ -213,7 +238,6 @@ export default function Home() {
 
     setGridItems(newItems);
 
-    // input 초기화(같은 파일 재선택 가능)
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -262,14 +286,12 @@ export default function Home() {
     }
   };
 
-  // ✅ 저장: 캔버스 직접 합성 후 JPG 다운로드 (테마/보드 스타일 반영)
+  // ✅ 저장: 캔버스 직접 합성 후 JPG 다운로드
   const exportToImage = async () => {
     try {
       setIsExporting(true);
 
       const date = new Date().toISOString().slice(0, 10);
-
-      // 파일명(입력 없으면 moodmap)
       const safeTitle = (boardTitle || "moodmap")
         .trim()
         .replace(/[\\/:*?"<>|]/g, "")
@@ -278,11 +300,9 @@ export default function Home() {
       const cols = 3;
       const rows = Math.ceil(gridItems.length / cols);
 
-      // 출력 크기(슬라이더 반영)
       const cell = cellPx;
       const gap = gapPx;
 
-      // 바깥 여백/타이틀/푸터
       const pad = 56;
       const titleH = 90;
       const footerH = 50;
@@ -301,10 +321,8 @@ export default function Home() {
       ctx.fillStyle = boardBgColor;
       ctx.fillRect(0, 0, width, height);
 
-      // 저장 이미지 제목
+      // 제목(저장 이미지)
       const exportTitle = boardTitle || PAGE_TITLE;
-
-      // 제목 색상(사용자 선택)
       ctx.fillStyle = titleColor;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
@@ -313,7 +331,7 @@ export default function Home() {
 
       const startY = pad + titleH;
 
-      // 이미지 로드(있는 것만)
+      // 이미지 로드
       const loadedMap = new Map<string, HTMLImageElement>();
       await Promise.all(
         gridItems
@@ -334,8 +352,8 @@ export default function Home() {
         const x = pad + c * (cell + gap);
         const y = startY + r * (cell + gap);
 
-        // 라운드 클립(크기에 맞춰)
         const radius = Math.max(12, Math.min(22, Math.floor(cell * 0.05)));
+
         ctx.save();
         ctx.beginPath();
         ctx.moveTo(x + radius, y);
@@ -352,7 +370,6 @@ export default function Home() {
         if (img) {
           drawCover(ctx, img, x, y, cell, cell);
         } else {
-          // ✅ 다크모드 보드 기본값 느낌: "잠긴 사각형"
           ctx.fillStyle = palette.emptyFill;
           ctx.fillRect(x, y, cell, cell);
           ctx.strokeStyle = palette.emptyStroke;
@@ -436,10 +453,10 @@ export default function Home() {
               value={boardTitle}
               onChange={(e) => setBoardTitle(e.target.value)}
               placeholder="제목을 입력하세요 (선택)"
-              className="w-full max-w-xs mx-auto rounded-full px-4 py-2 text-center border bg-white/50 outline-none"
+              className="w-full max-w-xs mx-auto rounded-full px-4 py-2 text-center border outline-none"
               style={{
-                borderColor: theme === "dark" ? "rgba(230,237,243,0.14)" : "rgba(15,30,46,0.12)",
-                backgroundColor: theme === "dark" ? "rgba(17,30,39,0.35)" : "rgba(255,255,255,0.55)",
+                borderColor: palette.btnOutlineBorder,
+                backgroundColor: palette.btnOutlineBg,
                 color: palette.siteTitle,
               }}
             />
@@ -466,8 +483,8 @@ export default function Home() {
                     placeholder={palette.boardDefaultBg}
                     className="w-36 rounded-full px-3 py-2 text-center border outline-none"
                     style={{
-                      borderColor: theme === "dark" ? "rgba(230,237,243,0.14)" : "rgba(15,30,46,0.12)",
-                      backgroundColor: theme === "dark" ? "rgba(17,30,39,0.35)" : "rgba(255,255,255,0.55)",
+                      borderColor: palette.btnOutlineBorder,
+                      backgroundColor: palette.btnOutlineBg,
                       color: palette.siteTitle,
                     }}
                   />
@@ -499,8 +516,8 @@ export default function Home() {
                     placeholder={palette.boardTitleDefault}
                     className="w-36 rounded-full px-3 py-2 text-center border outline-none"
                     style={{
-                      borderColor: theme === "dark" ? "rgba(230,237,243,0.14)" : "rgba(15,30,46,0.12)",
-                      backgroundColor: theme === "dark" ? "rgba(17,30,39,0.35)" : "rgba(255,255,255,0.55)",
+                      borderColor: palette.btnOutlineBorder,
+                      backgroundColor: palette.btnOutlineBg,
                       color: palette.siteTitle,
                     }}
                   />
@@ -521,16 +538,7 @@ export default function Home() {
                   <span>간격</span>
                   <span>{gapPx}px</span>
                 </div>
-                <input
-                  type="range"
-                  min={0}
-                  max={40}
-                  step={1}
-                  value={gapPx}
-                  onChange={(e) => setGapPx(parseInt(e.target.value, 10))}
-                  className="w-full"
-                  aria-label="간격 조절"
-                />
+                <input type="range" min={0} max={40} step={1} value={gapPx} onChange={(e) => setGapPx(parseInt(e.target.value, 10))} className="w-full" />
               </div>
 
               {/* 크기 */}
@@ -539,47 +547,41 @@ export default function Home() {
                   <span>크기</span>
                   <span>{cellPx}px</span>
                 </div>
-                <input
-                  type="range"
-                  min={240}
-                  max={560}
-                  step={1}
-                  value={cellPx}
-                  onChange={(e) => setCellPx(parseInt(e.target.value, 10))}
-                  className="w-full"
-                  aria-label="사진 크기 조절"
-                />
+                <input type="range" min={240} max={560} step={1} value={cellPx} onChange={(e) => setCellPx(parseInt(e.target.value, 10))} className="w-full" />
               </div>
             </div>
           </div>
         </header>
 
-        {/* Action Bar */}
+        {/* Action Bar (버튼 톤 정리) */}
         <div className="flex flex-wrap gap-4 justify-center mb-3">
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleImageUpload}
-            className="hidden"
-            multiple
-            accept="image/*"
-          />
+          <input type="file" ref={fileInputRef} onChange={handleImageUpload} className="hidden" multiple accept="image/*" />
 
+          {/* ✅ 사진 가져오기 (모드별 outline 톤) */}
           <Button
             onClick={() => fileInputRef.current?.click()}
             variant="outline"
             size="lg"
-            className="rounded-full px-8 h-12 border-primary/20 hover:bg-primary/5 hover:text-primary transition-all duration-300 shadow-sm hover:shadow-md"
+            className="rounded-full px-8 h-12 shadow-sm"
+            style={{
+              backgroundColor: palette.btnOutlineBg,
+              borderColor: palette.btnOutlineBorder,
+              color: palette.btnOutlineText,
+            }}
           >
             <Upload className="w-4 h-4 mr-2" />
             사진 가져오기
           </Button>
 
+          {/* ✅ 칸 추가하기 (모드별 ghost 톤) */}
           <Button
             onClick={addGridSlot}
             variant="ghost"
             size="lg"
-            className="rounded-full px-6 h-12 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all duration-300"
+            className="rounded-full px-6 h-12"
+            style={{
+              color: palette.btnGhostMuted,
+            }}
           >
             <Plus className="w-4 h-4 mr-2" />
             칸 추가하기
@@ -601,10 +603,7 @@ export default function Home() {
         >
           {boardTitle ? (
             <div className="text-center mb-6">
-              <div
-                className="text-2xl md:text-3xl font-serif font-light tracking-tight"
-                style={{ color: titleColor }}
-              >
+              <div className="text-2xl md:text-3xl font-serif font-light tracking-tight" style={{ color: titleColor }}>
                 {boardTitle}
               </div>
             </div>
@@ -638,8 +637,8 @@ export default function Home() {
                     <span
                       className="inline-flex items-center justify-center w-8 h-8 rounded-full border shadow-sm"
                       style={{
-                        backgroundColor: theme === "dark" ? "rgba(11,20,28,0.55)" : "rgba(255,255,255,0.80)",
-                        borderColor: theme === "dark" ? "rgba(230,237,243,0.18)" : "rgba(15,30,46,0.12)",
+                        backgroundColor: palette.btnOutlineBg,
+                        borderColor: palette.btnOutlineBorder,
                       }}
                     >
                       <X className="w-4 h-4" style={{ color: palette.siteDesc }} />
@@ -679,21 +678,23 @@ export default function Home() {
             })}
           </div>
 
-          <div
-            className="text-center mt-8 text-xs font-serif tracking-widest uppercase"
-            style={{ color: palette.footer }}
-          >
+          <div className="text-center mt-8 text-xs font-serif tracking-widest uppercase" style={{ color: palette.footer }}>
             Created with MoodMap
           </div>
         </div>
 
-        {/* Save Button */}
+        {/* Save Button (모드별 CTA 톤) */}
         <div className="fixed bottom-8 left-0 right-0 flex justify-center pointer-events-none z-50">
           <Button
             onClick={exportToImage}
             disabled={isExporting}
             size="lg"
-            className="pointer-events-auto rounded-full px-8 h-14 shadow-[0_10px_30px_-10px_rgba(0,0,0,0.15)] bg-foreground text-background hover:bg-foreground/90 transition-all duration-500 hover:scale-105 active:scale-95 disabled:opacity-70 text-base font-medium"
+            className="pointer-events-auto rounded-full px-8 h-14 shadow-[0_10px_30px_-10px_rgba(0,0,0,0.15)] transition-all duration-500 hover:scale-105 active:scale-95 disabled:opacity-70 text-base font-medium"
+            style={{
+              backgroundColor: palette.saveBg,
+              color: palette.saveText,
+              border: `1px solid ${palette.btnOutlineBorder}`,
+            }}
           >
             {isExporting ? (
               <span className="animate-pulse">저장 중...</span>
