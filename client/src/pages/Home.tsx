@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
-import { Download, Image as ImageIcon, Plus, Trash2, Upload, X } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { Download, Image as ImageIcon, Moon, Plus, Sun, Trash2, Upload, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 interface MoodGridItem {
@@ -53,19 +53,56 @@ const drawCover = (
   ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
 };
 
+// ✅ 라이트/다크 팔레트 (상어 무드)
+const PALETTE = {
+  light: {
+    siteBg: "#F6F8F9",
+    siteTitle: "#0F1E2E",
+    siteDesc: "#5B6B7A",
+    boardDefaultBg: "#FAFAF7",
+    boardBorder: "rgba(0,0,0,0.06)",
+    emptyFill: "rgba(0,0,0,0.04)",
+    emptyStroke: "rgba(0,0,0,0.12)",
+    footer: "rgba(17,24,39,0.35)",
+    boardTitleDefault: "#111827",
+    hint: "rgba(15,30,46,0.55)",
+  },
+  dark: {
+    siteBg: "#0B141C",
+    siteTitle: "#E6EDF3",
+    siteDesc: "#8FA1B3",
+    boardDefaultBg: "#111E27",
+    boardBorder: "rgba(230,237,243,0.10)",
+    emptyFill: "rgba(230,237,243,0.06)",
+    emptyStroke: "rgba(230,237,243,0.14)",
+    footer: "rgba(230,237,243,0.35)",
+    boardTitleDefault: "#E6EDF3",
+    hint: "rgba(230,237,243,0.55)",
+  },
+} as const;
+
+type ThemePref = "system" | "light" | "dark";
+type Theme = "light" | "dark";
+
 export default function Home() {
   const PAGE_TITLE = "MOODMAP";
+
+  // ✅ (A) 기본은 시스템 따라감, 한 번 토글하면 사용자 선택이 우선
+  const [themePref, setThemePref] = useState<ThemePref>("system");
+  const [systemTheme, setSystemTheme] = useState<Theme>("light");
 
   // ✅ 저장 이미지/파일명에 들어갈 제목(사용자 입력)
   const [boardTitle, setBoardTitle] = useState("");
 
-  // ✅ 보드 색상: 입력값 + 적용값 분리
-  const [boardBgInput, setBoardBgInput] = useState("#fafaf9");
-  const [boardBgColor, setBoardBgColor] = useState("#fafaf9");
+  // ✅ 보드 색상: 입력값 + 적용값 분리 (사용자 커스텀 여부 추적)
+  const [boardBgInput, setBoardBgInput] = useState("#FAFAF7");
+  const [boardBgColor, setBoardBgColor] = useState("#FAFAF7");
+  const [boardBgTouched, setBoardBgTouched] = useState(false);
 
-  // ✅ 제목 색상: 입력값 + 적용값 분리
+  // ✅ 보드 제목 색상: 입력값 + 적용값 분리 (사용자 커스텀 여부 추적)
   const [titleColorInput, setTitleColorInput] = useState("#111827");
   const [titleColor, setTitleColor] = useState("#111827");
+  const [titleColorTouched, setTitleColorTouched] = useState(false);
 
   // ✅ 간격/크기: 슬라이더
   const [gapPx, setGapPx] = useState(16); // 0~40
@@ -81,6 +118,46 @@ export default function Home() {
 
   const filledCount = useMemo(() => gridItems.filter((i) => !!i.url).length, [gridItems]);
 
+  // ✅ 현재 적용 테마(시스템/사용자 선택 반영)
+  const theme: Theme = useMemo(() => {
+    if (themePref === "system") return systemTheme;
+    return themePref;
+  }, [themePref, systemTheme]);
+
+  const palette = PALETTE[theme];
+
+  // ✅ (A-1) 시스템 다크/라이트 감지 + 로컬 설정 불러오기
+  useEffect(() => {
+    // 1) 시스템 테마 감지
+    const mq = window.matchMedia?.("(prefers-color-scheme: dark)");
+    const updateSystem = () => setSystemTheme(mq?.matches ? "dark" : "light");
+    updateSystem();
+    mq?.addEventListener?.("change", updateSystem);
+
+    // 2) 저장된 사용자 선택 불러오기
+    const saved = (localStorage.getItem("moodmap-theme") as ThemePref | null) ?? "system";
+    if (saved === "light" || saved === "dark" || saved === "system") {
+      setThemePref(saved);
+    }
+
+    return () => mq?.removeEventListener?.("change", updateSystem);
+  }, []);
+
+  // ✅ (A-2) 테마 바뀔 때, "사용자가 안 만진 값"만 기본값으로 따라가게
+  useEffect(() => {
+    if (!boardBgTouched) {
+      const next = palette.boardDefaultBg;
+      setBoardBgColor(next);
+      setBoardBgInput(next);
+    }
+    if (!titleColorTouched) {
+      const next = palette.boardTitleDefault;
+      setTitleColor(next);
+      setTitleColorInput(next);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [theme]); // palette는 theme에 종속
+
   // ✅ blob URL 메모리 누수 방지
   const revokeIfNeeded = (url: string | null) => {
     if (!url) return;
@@ -89,6 +166,7 @@ export default function Home() {
 
   // ✅ 보드 색상 HEX 적용
   const applyBoardBgIfValid = (next: string) => {
+    setBoardBgTouched(true);
     setBoardBgInput(next);
     const norm = normalizeHex(next);
     if (norm) setBoardBgColor(norm);
@@ -96,9 +174,17 @@ export default function Home() {
 
   // ✅ 제목 색 HEX 적용
   const applyTitleColorIfValid = (next: string) => {
+    setTitleColorTouched(true);
     setTitleColorInput(next);
     const norm = normalizeHex(next);
     if (norm) setTitleColor(norm);
+  };
+
+  // ✅ 라이트/다크 토글 (UI는 2단이지만, 최초는 시스템을 따름)
+  const toggleTheme = () => {
+    const next: Theme = theme === "dark" ? "light" : "dark";
+    setThemePref(next);
+    localStorage.setItem("moodmap-theme", next);
   };
 
   // 이미지 업로드: 빈칸부터 채우고 남으면 칸 추가
@@ -176,7 +262,7 @@ export default function Home() {
     }
   };
 
-  // ✅ 저장: 캔버스 직접 합성 후 JPG 다운로드
+  // ✅ 저장: 캔버스 직접 합성 후 JPG 다운로드 (테마/보드 스타일 반영)
   const exportToImage = async () => {
     try {
       setIsExporting(true);
@@ -218,7 +304,7 @@ export default function Home() {
       // 저장 이미지 제목
       const exportTitle = boardTitle || PAGE_TITLE;
 
-      // 제목 색상
+      // 제목 색상(사용자 선택)
       ctx.fillStyle = titleColor;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
@@ -248,7 +334,7 @@ export default function Home() {
         const x = pad + c * (cell + gap);
         const y = startY + r * (cell + gap);
 
-        // 라운드 클립(크기에 맞춰 적당히)
+        // 라운드 클립(크기에 맞춰)
         const radius = Math.max(12, Math.min(22, Math.floor(cell * 0.05)));
         ctx.save();
         ctx.beginPath();
@@ -266,9 +352,10 @@ export default function Home() {
         if (img) {
           drawCover(ctx, img, x, y, cell, cell);
         } else {
-          ctx.fillStyle = "rgba(0,0,0,0.04)";
+          // ✅ 다크모드 보드 기본값 느낌: "잠긴 사각형"
+          ctx.fillStyle = palette.emptyFill;
           ctx.fillRect(x, y, cell, cell);
-          ctx.strokeStyle = "rgba(0,0,0,0.12)";
+          ctx.strokeStyle = palette.emptyStroke;
           ctx.lineWidth = 3;
           ctx.strokeRect(x + 6, y + 6, cell - 12, cell - 12);
         }
@@ -277,7 +364,7 @@ export default function Home() {
       }
 
       // footer
-      ctx.fillStyle = "rgba(17,24,39,0.35)";
+      ctx.fillStyle = palette.footer;
       ctx.font = "16px serif";
       ctx.fillText("CREATED WITH MOODMAP", width / 2, height - pad / 2);
 
@@ -305,15 +392,40 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen text-foreground font-sans selection:bg-primary/20 bg-background">
+    <div
+      className="min-h-screen font-sans selection:bg-primary/20"
+      style={{
+        backgroundColor: palette.siteBg,
+        color: palette.siteTitle,
+      }}
+    >
       <main className="container max-w-4xl py-12 md:py-20 px-4 mx-auto flex flex-col items-center">
         {/* Header */}
-        <header className="text-center mb-10 space-y-4 w-full">
-          <h1 className="text-4xl md:text-5xl font-serif font-light tracking-tight text-foreground/90">
+        <header className="text-center mb-10 space-y-4 w-full relative">
+          {/* ✅ 우측 상단 작은 토글 */}
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="absolute right-0 top-0 flex items-center gap-2 text-xs"
+            style={{ color: palette.siteDesc }}
+            aria-label="라이트/다크 전환"
+            title="라이트/다크 전환"
+          >
+            {theme === "dark" ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+            <span className="tracking-wide">{theme === "dark" ? "DARK" : "LIGHT"}</span>
+          </button>
+
+          <h1
+            className="text-4xl md:text-5xl font-serif font-light tracking-tight"
+            style={{ color: palette.siteTitle }}
+          >
             {PAGE_TITLE}
           </h1>
 
-          <p className="text-muted-foreground font-light text-lg max-w-md mx-auto leading-relaxed">
+          <p
+            className="font-light text-lg max-w-md mx-auto leading-relaxed"
+            style={{ color: palette.siteDesc }}
+          >
             좋아하는 순간들을 모아 한 장의 그림으로.<br />
             MOODMAP으로 복잡함 없이, 오직 사진과 당신의 감각으로만.
           </p>
@@ -324,14 +436,21 @@ export default function Home() {
               value={boardTitle}
               onChange={(e) => setBoardTitle(e.target.value)}
               placeholder="제목을 입력하세요 (선택)"
-              className="w-full max-w-xs mx-auto rounded-full px-4 py-2 text-center border border-border/50 bg-background/70 text-foreground outline-none focus:ring-2 focus:ring-primary/20"
+              className="w-full max-w-xs mx-auto rounded-full px-4 py-2 text-center border bg-white/50 outline-none"
+              style={{
+                borderColor: theme === "dark" ? "rgba(230,237,243,0.14)" : "rgba(15,30,46,0.12)",
+                backgroundColor: theme === "dark" ? "rgba(17,30,39,0.35)" : "rgba(255,255,255,0.55)",
+                color: palette.siteTitle,
+              }}
             />
 
             {/* 보드 색상/제목 색상: 가로 */}
             <div className="flex flex-wrap items-end justify-center gap-8">
               {/* 보드 색상 */}
               <div className="flex flex-col items-center gap-2">
-                <div className="text-xs text-muted-foreground/70">보드 색상</div>
+                <div className="text-xs" style={{ color: palette.siteDesc }}>
+                  보드 색상
+                </div>
                 <div className="flex items-center gap-3">
                   <input
                     type="color"
@@ -344,20 +463,27 @@ export default function Home() {
                   <input
                     value={boardBgInput}
                     onChange={(e) => applyBoardBgIfValid(e.target.value)}
-                    placeholder="#fafaf9"
-                    className="w-36 rounded-full px-3 py-2 text-center border border-border/50 bg-background/70 text-foreground outline-none focus:ring-2 focus:ring-primary/20"
+                    placeholder={palette.boardDefaultBg}
+                    className="w-36 rounded-full px-3 py-2 text-center border outline-none"
+                    style={{
+                      borderColor: theme === "dark" ? "rgba(230,237,243,0.14)" : "rgba(15,30,46,0.12)",
+                      backgroundColor: theme === "dark" ? "rgba(17,30,39,0.35)" : "rgba(255,255,255,0.55)",
+                      color: palette.siteTitle,
+                    }}
                   />
                 </div>
                 {boardBgInput.trim() && !normalizeHex(boardBgInput) ? (
-                  <div className="text-xs text-muted-foreground/60">
-                    HEX 형식으로 입력해줘 (예: #fafaf9 또는 fafaf9)
+                  <div className="text-xs" style={{ color: palette.hint }}>
+                    HEX 형식으로 입력해줘 (예: {palette.boardDefaultBg})
                   </div>
                 ) : null}
               </div>
 
               {/* 제목 색상 */}
               <div className="flex flex-col items-center gap-2">
-                <div className="text-xs text-muted-foreground/70">제목 색상</div>
+                <div className="text-xs" style={{ color: palette.siteDesc }}>
+                  제목 색상
+                </div>
                 <div className="flex items-center gap-3">
                   <input
                     type="color"
@@ -370,23 +496,28 @@ export default function Home() {
                   <input
                     value={titleColorInput}
                     onChange={(e) => applyTitleColorIfValid(e.target.value)}
-                    placeholder="#111827"
-                    className="w-36 rounded-full px-3 py-2 text-center border border-border/50 bg-background/70 text-foreground outline-none focus:ring-2 focus:ring-primary/20"
+                    placeholder={palette.boardTitleDefault}
+                    className="w-36 rounded-full px-3 py-2 text-center border outline-none"
+                    style={{
+                      borderColor: theme === "dark" ? "rgba(230,237,243,0.14)" : "rgba(15,30,46,0.12)",
+                      backgroundColor: theme === "dark" ? "rgba(17,30,39,0.35)" : "rgba(255,255,255,0.55)",
+                      color: palette.siteTitle,
+                    }}
                   />
                 </div>
                 {titleColorInput.trim() && !normalizeHex(titleColorInput) ? (
-                  <div className="text-xs text-muted-foreground/60">
-                    HEX 형식으로 입력해줘 (예: #111827 또는 111827)
+                  <div className="text-xs" style={{ color: palette.hint }}>
+                    HEX 형식으로 입력해줘 (예: {palette.boardTitleDefault})
                   </div>
                 ) : null}
               </div>
             </div>
 
-            {/* ✅ 간격/크기 슬라이더 */}
+            {/* 간격/크기 슬라이더 */}
             <div className="w-full max-w-md flex flex-col gap-4 pt-2">
               {/* 간격 */}
               <div className="flex flex-col gap-2">
-                <div className="flex items-center justify-between text-xs text-muted-foreground/70">
+                <div className="flex items-center justify-between text-xs" style={{ color: palette.siteDesc }}>
                   <span>간격</span>
                   <span>{gapPx}px</span>
                 </div>
@@ -404,7 +535,7 @@ export default function Home() {
 
               {/* 크기 */}
               <div className="flex flex-col gap-2">
-                <div className="flex items-center justify-between text-xs text-muted-foreground/70">
+                <div className="flex items-center justify-between text-xs" style={{ color: palette.siteDesc }}>
                   <span>크기</span>
                   <span>{cellPx}px</span>
                 </div>
@@ -456,7 +587,7 @@ export default function Home() {
         </div>
 
         {/* ✅ 채운 사진: Action Bar 아래 / 보드 위 */}
-        <div className="mb-6 text-xs text-muted-foreground/70">
+        <div className="mb-6 text-xs" style={{ color: palette.siteDesc }}>
           채운 사진: {filledCount} / {gridItems.length}
         </div>
 
@@ -465,7 +596,7 @@ export default function Home() {
           className="w-full p-4 md:p-8 rounded-xl shadow-[0_20px_40px_-15px_rgba(0,0,0,0.08)] mb-24 border"
           style={{
             backgroundColor: boardBgColor,
-            borderColor: "rgba(0,0,0,0.06)",
+            borderColor: palette.boardBorder,
           }}
         >
           {boardTitle ? (
@@ -481,70 +612,77 @@ export default function Home() {
             <div className="mb-6" />
           )}
 
-          <div
-            className="grid grid-cols-1 md:grid-cols-3"
-            style={{ gap: `${gapPx}px` }}
-          >
-            {gridItems.map((item) => (
-              <div
-                key={item.id}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => handleDrop(e, item.id)}
-                className={`relative group rounded-lg overflow-hidden transition-all duration-500 ease-out
-                  ${
-                    item.url
-                      ? "bg-transparent shadow-sm"
-                      : "bg-secondary/30 border-2 border-dashed border-muted-foreground/10 hover:border-primary/30 hover:bg-secondary/50"
-                  }`}
-                style={{
-                  width: "100%",
-                  aspectRatio: "1 / 1",
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={() => removeGridSlot(item.id)}
-                  className="absolute top-2 right-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity"
-                  aria-label="칸 삭제"
-                  title="칸 삭제"
-                >
-                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-background/80 border border-border/40 shadow-sm hover:bg-background">
-                    <X className="w-4 h-4 text-muted-foreground" />
-                  </span>
-                </button>
+          <div className="grid grid-cols-1 md:grid-cols-3" style={{ gap: `${gapPx}px` }}>
+            {gridItems.map((item) => {
+              const isEmpty = !item.url;
 
-                {item.url ? (
-                  <>
-                    <img
-                      src={item.url}
-                      alt="Mood"
-                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                    />
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100">
-                      <Button
-                        variant="destructive"
-                        size="icon"
-                        className="rounded-full w-10 h-10 shadow-lg scale-90 hover:scale-100 transition-transform"
-                        onClick={() => removeImage(item.id)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </>
-                ) : (
-                  <div
-                    className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground/40 cursor-pointer"
-                    onClick={() => fileInputRef.current?.click()}
+              return (
+                <div
+                  key={item.id}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => handleDrop(e, item.id)}
+                  className="relative group rounded-lg overflow-hidden transition-all duration-500 ease-out"
+                  style={{
+                    aspectRatio: "1 / 1",
+                    backgroundColor: isEmpty ? palette.emptyFill : "transparent",
+                    border: isEmpty ? `2px dashed ${palette.emptyStroke}` : "none",
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => removeGridSlot(item.id)}
+                    className="absolute top-2 right-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity"
+                    aria-label="칸 삭제"
+                    title="칸 삭제"
                   >
-                    <ImageIcon className="w-8 h-8 mb-2 opacity-50" />
-                    <span className="text-sm font-light">Drop or Click</span>
-                  </div>
-                )}
-              </div>
-            ))}
+                    <span
+                      className="inline-flex items-center justify-center w-8 h-8 rounded-full border shadow-sm"
+                      style={{
+                        backgroundColor: theme === "dark" ? "rgba(11,20,28,0.55)" : "rgba(255,255,255,0.80)",
+                        borderColor: theme === "dark" ? "rgba(230,237,243,0.18)" : "rgba(15,30,46,0.12)",
+                      }}
+                    >
+                      <X className="w-4 h-4" style={{ color: palette.siteDesc }} />
+                    </span>
+                  </button>
+
+                  {item.url ? (
+                    <>
+                      <img
+                        src={item.url}
+                        alt="Mood"
+                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                      />
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100">
+                        <Button
+                          variant="destructive"
+                          size="icon"
+                          className="rounded-full w-10 h-10 shadow-lg scale-90 hover:scale-100 transition-transform"
+                          onClick={() => removeImage(item.id)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <div
+                      className="absolute inset-0 flex flex-col items-center justify-center cursor-pointer"
+                      onClick={() => fileInputRef.current?.click()}
+                      style={{ color: palette.hint }}
+                    >
+                      <ImageIcon className="w-8 h-8 mb-2 opacity-50" />
+                      <span className="text-sm font-light">Drop or Click</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
 
-          <div className="text-center mt-8 text-xs text-muted-foreground/30 font-serif tracking-widest uppercase">
+          <div
+            className="text-center mt-8 text-xs font-serif tracking-widest uppercase"
+            style={{ color: palette.footer }}
+          >
             Created with MoodMap
           </div>
         </div>
