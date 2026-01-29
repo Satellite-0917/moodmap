@@ -63,12 +63,11 @@ const drawCover = (
 };
 
 export default function Home() {
-    // ✅ 페이지 상단 고정 타이틀
-   const PAGE_TITLE = "MOODMAP";
+  // ✅ 페이지 상단 고정 타이틀
+  const PAGE_TITLE = "MOODMAP";
 
-   // ✅ 저장 이미지/파일명에 들어갈 제목(사용자 입력)
-   const [boardTitle, setBoardTitle] = useState("의 MOODMAP");
-
+  // ✅ 저장 이미지/파일명에 들어갈 제목(사용자 입력) — 기본값 빈칸
+  const [boardTitle, setBoardTitle] = useState("");
 
   // ✅ 배경색: 입력값 + 적용값 분리 (잘못된 HEX 입력 대비)
   const [bgInput, setBgInput] = useState("#fafaf9");
@@ -183,7 +182,9 @@ export default function Home() {
       setIsExporting(true);
 
       const date = new Date().toISOString().slice(0, 10);
-      const safeTitle = (title || "moodmap")
+
+      // 파일명(입력 없으면 moodmap)
+      const safeTitle = (boardTitle || "moodmap")
         .trim()
         .replace(/[\\/:*?"<>|]/g, "")
         .slice(0, 30);
@@ -215,12 +216,15 @@ export default function Home() {
       // 텍스트 색
       const textColor = isDarkColor(bgColor) ? "#ffffff" : "#111827";
 
+      // ✅ 저장 이미지 제목: 입력값이 있으면 입력값, 없으면 MOODMAP
+      const exportTitle = boardTitle || PAGE_TITLE;
+
       // 제목
       ctx.fillStyle = textColor;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.font = "48px serif";
-      ctx.fillText(title || "MOODMAP", width / 2, pad + titleH / 2);
+      ctx.fillText(exportTitle, width / 2, pad + titleH / 2);
 
       const startY = pad + titleH;
 
@@ -266,9 +270,11 @@ export default function Home() {
           drawCover(ctx, img, x, y, cell, cell);
         } else {
           // 빈칸 스타일
-          ctx.fillStyle = textColor === "#ffffff" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.04)";
+          ctx.fillStyle =
+            textColor === "#ffffff" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.04)";
           ctx.fillRect(x, y, cell, cell);
-          ctx.strokeStyle = textColor === "#ffffff" ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.12)";
+          ctx.strokeStyle =
+            textColor === "#ffffff" ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.12)";
           ctx.lineWidth = 3;
           ctx.strokeRect(x + 6, y + 6, cell - 12, cell - 12);
         }
@@ -277,7 +283,8 @@ export default function Home() {
       }
 
       // footer
-      ctx.fillStyle = textColor === "#ffffff" ? "rgba(255,255,255,0.35)" : "rgba(17,24,39,0.35)";
+      ctx.fillStyle =
+        textColor === "#ffffff" ? "rgba(255,255,255,0.35)" : "rgba(17,24,39,0.35)";
       ctx.font = "16px serif";
       ctx.fillText("CREATED WITH MOODMAP", width / 2, height - pad / 2);
 
@@ -305,12 +312,16 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen text-foreground font-sans selection:bg-primary/20" style={{ backgroundColor: bgColor }}>
+    <div
+      className="min-h-screen text-foreground font-sans selection:bg-primary/20"
+      style={{ backgroundColor: bgColor }}
+    >
       <main className="container max-w-4xl py-12 md:py-20 px-4 mx-auto flex flex-col items-center">
         {/* Header */}
         <header className="text-center mb-10 space-y-4 w-full">
+          {/* ✅ 페이지 상단은 항상 MOODMAP 고정 */}
           <h1 className="text-4xl md:text-5xl font-serif font-light tracking-tight text-foreground/90">
-            {title || "MOODMAP"}
+            {PAGE_TITLE}
           </h1>
 
           <p className="text-muted-foreground font-light text-lg max-w-md mx-auto leading-relaxed">
@@ -319,15 +330,15 @@ export default function Home() {
           </p>
 
           <div className="flex flex-col items-center gap-3 pt-2">
-            {/* 제목 입력 */}
+            {/* ✅ 보드 제목 입력(전체 문구를 자유롭게 쓰고 지우기) */}
             <input
               value={boardTitle}
               onChange={(e) => setBoardTitle(e.target.value)}
-              placeholder="제목을 입력하세요"
+              placeholder="저장 이미지에 들어갈 제목을 입력하세요 (선택)"
               className="w-full max-w-xs mx-auto rounded-full px-4 py-2 text-center border border-border/50 bg-background/70 text-foreground outline-none focus:ring-2 focus:ring-primary/20"
             />
 
-            {/* ✅ 배경색: 라벨 없이 피커 + HEX 입력만 */}
+            {/* 배경색: 피커 + HEX */}
             <div className="flex items-center gap-3">
               <input
                 type="color"
@@ -349,7 +360,6 @@ export default function Home() {
               채운 사진: {filledCount} / {gridItems.length}
             </div>
 
-            {/* 입력이 틀렸을 때만 조용히 힌트 (원하면 삭제 가능) */}
             {bgInput.trim() && !normalizeHex(bgInput) ? (
               <div className="text-xs text-muted-foreground/60">
                 HEX 형식으로 입력해줘 (예: #fafaf9 또는 fafaf9)
@@ -390,7 +400,7 @@ export default function Home() {
           </Button>
         </div>
 
-        {/* 화면 표시용 보드 (저장엔 영향 없음: 저장은 캔버스로 직접 합성) */}
+        {/* 화면 표시용 보드 */}
         <div
           className="w-full p-4 md:p-8 rounded-xl shadow-[0_20px_40px_-15px_rgba(0,0,0,0.08)] mb-24 border"
           style={{
@@ -398,11 +408,16 @@ export default function Home() {
             borderColor: darkBg ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.06)",
           }}
         >
-          <div className="text-center mb-6">
-            <div className="text-2xl md:text-3xl font-serif font-light tracking-tight">
-              {title || "MOODMAP"}
+          {/* ✅ 보드 내부 제목: 입력 없으면 제목줄 자체를 숨김 */}
+          {boardTitle ? (
+            <div className="text-center mb-6">
+              <div className="text-2xl md:text-3xl font-serif font-light tracking-tight">
+                {boardTitle}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="mb-6" />
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {gridItems.map((item) => (
