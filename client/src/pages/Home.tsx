@@ -646,7 +646,7 @@ export default function Home() {
                   step={1}
                   value={cellPx}
                   onChange={(e) => setCellPx(parseInt(e.target.value, 10))}
-                  className="w-full"
+                  className="w-full accent-blue-500"
                 />
               </div>
             </div>
